@@ -31,7 +31,7 @@ const attentionLabels = new Set([
   "Publication Decision"
 ]);
 
-const API_BASE = "http://afmjonline.com/api/EICcountersAPI.php";
+const API_BASE = "https://afmjonline.com/api/EICcountersAPI.php";
 
 const Sidebar: FC = () => {
   const [collapsed, setCollapsed] = useState(false);
