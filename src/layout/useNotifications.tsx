@@ -10,7 +10,7 @@ export interface Notification {
   read: boolean;
 }
 
-const API_BASE = "http://afmjonline.com/api/EICnotificationsAPI.php";
+const API_BASE = "https://afmjonline.com/api/EICnotificationsAPI.php";
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
