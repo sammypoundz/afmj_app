@@ -95,7 +95,7 @@ const Sidebar: FC = () => {
 
             /* Publications */
             else if (group.section === "Publications") {
-              if (item.label === "Published") path = "/publications/published";
+              if (item.label === "Published") path = "/manuscripts/published"; // ✅ updated
               else if (item.label === "Publication Decision") path = "/publications/decision";
             }
 
@@ -109,7 +109,7 @@ const Sidebar: FC = () => {
             /* System */
             else if (group.section === "System") {
               if (item.label === "Analytics") path = "/eic/analytics";
-              else if (item.label === "Settings") path = "/eic/settings";
+              // else if (item.label === "Settings") path = "/eic/settings";
               else if (item.label === "Profile & Logs") path = "/eic/ProfileAndLogs";
             }
 

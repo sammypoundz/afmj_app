@@ -91,6 +91,7 @@ interface Manuscript {
   editor?: string;
   // New fields from API
   pendingReviews?: number;
+  completedReviews?: number;   // <-- NEW
   hasRevisions?: boolean;
   hasUploadedRevision?: boolean;
 }
@@ -107,7 +108,6 @@ interface Editor {
 
 type ReviewStatus = "not_opened" | "reviewing" | "reviewed";
 
-// Updated ReviewerProgress to include scores and recommendation
 interface ReviewerProgress {
   reviewer: string;
   status: ReviewStatus;
@@ -459,13 +459,16 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
       , revisions[0])
     : null;
 
-  const pendingReviewersFromLatest = latestRevision
-    ? latestRevision.entries
-        .filter(e => !e.addressed)
-        .map(e => e.reviewer)
-    : [];
+  // Check if latest revision is complete: no pending entries and both files exist
+  const hasPending = latestRevision
+    ? latestRevision.entries.some(e => !e.addressed)
+    : false;
 
-  const hasPending = pendingReviewersFromLatest.length > 0;
+  const filesComplete = latestRevision
+    ? latestRevision.revisedFile && latestRevision.responseFile
+    : false;
+
+  const canReassign = !hasPending && filesComplete;
 
   return (
     <div
@@ -932,14 +935,14 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
             {/* Reassign to Pending Reviewers button */}
             <button
               onClick={() => setShowReassignModal(true)}
-              disabled={!hasPending || reassigning}
+              disabled={!canReassign || reassigning}
               style={{
                 padding: "10px 20px",
                 borderRadius: "8px",
                 border: "1px solid #d1d5db",
-                background: !hasPending ? "#f3f4f6" : "#fff",
-                color: !hasPending ? "#9ca3af" : "#374151",
-                cursor: !hasPending ? "not-allowed" : "pointer",
+                background: !canReassign ? "#f3f4f6" : "#fff",
+                color: !canReassign ? "#9ca3af" : "#374151",
+                cursor: !canReassign ? "not-allowed" : "pointer",
                 fontSize: "0.9rem",
                 fontWeight: 500,
                 display: "flex",
@@ -975,7 +978,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
       {showReassignModal && (
         <ReviewerSelectionModal
           reviewers={allReviewers}
-          currentReviewers={pendingReviewersFromLatest}
+          currentReviewers={latestRevision ? latestRevision.entries.filter(e => !e.addressed).map(e => e.reviewer) : []}
           onClose={() => setShowReassignModal(false)}
           onSave={async (selectedNames) => {
             setReassigning(true);
@@ -1710,7 +1713,12 @@ const ManuscriptCategoryView: FC = () => {
         fetch(`${API}?action=list&status=${encodeURIComponent(readableStatus)}`).then((r) => r.json()),
         fetch(`${API}?action=reviewers`).then((r) => r.json()),
       ]);
-      setManuscripts(data.data || []);
+      // Ensure each manuscript has completedReviews (default 0 if missing)
+      const manuscriptsWithCompleted = (data.data || []).map((m: any) => ({
+        ...m,
+        completedReviews: m.completedReviews ?? 0,
+      }));
+      setManuscripts(manuscriptsWithCompleted);
       setAllReviewers(reviewers);
       setCurrentPage(1);
     } catch (err) {
@@ -1727,9 +1735,17 @@ const ManuscriptCategoryView: FC = () => {
   useEffect(() => {
     let filtered: Manuscript[] = [];
     if (readableStatus === "Under Review") {
-      // Under Review: no revisions OR (has revisions AND pendingReviews > 0)
+      // Under Review: manuscripts that are either:
+      // - First round under review (no revisions)
+      // - Have revisions and there are pending reviews
+      // - Have revisions, no pending reviews, but there are completed reviews (ready for decision)
       filtered = manuscripts.filter(
-        (m) => !m.hasRevisions || (m.hasRevisions && m.pendingReviews && m.pendingReviews > 0)
+        (m) =>
+          !m.hasRevisions || // first round
+          (m.hasRevisions &&
+            ((m.pendingReviews && m.pendingReviews > 0) || // ongoing review
+              (m.pendingReviews === 0 && m.completedReviews && m.completedReviews > 0)) // ready for decision
+          )
       );
     } else if (readableStatus === "Revision Requested") {
       // Revision Requested: has revisions, no uploaded files, no pending reviews
@@ -1737,9 +1753,13 @@ const ManuscriptCategoryView: FC = () => {
         (m) => m.hasRevisions && !m.hasUploadedRevision && m.pendingReviews === 0
       );
     } else if (readableStatus === "Revised") {
-      // Revised: has revisions, has uploaded files, no pending reviews
+      // Revised: has revisions, has uploaded files, no pending reviews, and no completed reviews yet (just submitted)
       filtered = manuscripts.filter(
-        (m) => m.hasRevisions && m.hasUploadedRevision && m.pendingReviews === 0
+        (m) =>
+          m.hasRevisions &&
+          m.hasUploadedRevision &&
+          m.pendingReviews === 0 &&
+          (!m.completedReviews || m.completedReviews === 0)
       );
     } else {
       // For all other categories (New Submissions, Accepted, Rejected, Published)

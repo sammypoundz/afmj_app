@@ -53,7 +53,7 @@ export const eicMenu = [
     section: "System",
     items: [
       { label: "Analytics", icon: BarChart3 },
-      { label: "Settings", icon: Settings },
+      // { label: "Settings", icon: Settings },
       { label: "Profile & Logs", icon: Shield },
     ],
   },

@@ -16,6 +16,9 @@ import ProfileAndLogs from "./pages/eic/ProfileAndLogs";
 import Analytics from "./pages/eic/Analytics";
 import Publication from "./pages/eic/Publication";
 import JournalIssues from "./pages/eic/JournalIssues";
+import UserReviewer from "./pages/eic/AllReviewers";
+import UserAuthor from "./pages/eic/AllAuthors";
+import UserEditor from "./pages/eic/AllEditors";
 
 /* ================= Editor Pages ================= */
 import EditorDashboard from "./pages/editor/EditorDashboard";
@@ -59,10 +62,13 @@ const AppRoutes = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="manuscripts" element={<Manuscripts />} />
         <Route path="manuscripts/:status" element={<ManuscriptCategoryView />} />
-        <Route path="published" element={<Published />} />
+        <Route path="publications/published" element={<Published />} />
+        <Route path="/users/reviewers" element={<UserReviewer />} />
+        <Route path="/users/editors" element={<UserEditor />} />
+        <Route path="/users/authors" element={<UserAuthor />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="eic/settings" element={<Settings />} />
-        <Route path="eic/profile-and-logs" element={<ProfileAndLogs />} />
+        <Route path="eic/ProfileAndLogs" element={<ProfileAndLogs />} />
         <Route path="eic/analytics" element={<Analytics />} />
         <Route path="publications/decision" element={<Publication />} />
         <Route path="publications/issues" element={<JournalIssues />} />

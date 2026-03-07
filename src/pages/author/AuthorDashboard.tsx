@@ -164,7 +164,7 @@ const styles = {
     boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
     border: "1px solid #e2e8f0",
     transition: "all 0.2s",
-    cursor: "pointer", // optional: make cards clickable
+    cursor: "pointer",
   },
   kpiHeader: {
     display: "flex",
@@ -194,7 +194,6 @@ const styles = {
     color: "#64748b",
     margin: 0,
   },
-  // Keep existing styles for other sections
   actionsPanel: {
     background: "#fff",
     borderRadius: "16px",
@@ -257,7 +256,11 @@ const AuthorDashboard = () => {
   const [selectedAction, setSelectedAction] = useState<PendingAction | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [hoveredKpi, setHoveredKpi] = useState<number | null>(null); // optional hover index
+  const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
+
+  // State for galley proof form
+  const [galleyComment, setGalleyComment] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -317,29 +320,56 @@ const AuthorDashboard = () => {
   const openActionModal = (action: PendingAction) => {
     setSelectedAction(action);
     setModalOpen(true);
+    // Reset form fields when opening modal
+    setGalleyComment("");
+    setSelectedFile(null);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setSelectedAction(null);
+    setGalleyComment("");
+    setSelectedFile(null);
   };
 
   const handleGalleyProofAction = async (action: "approve" | "reject") => {
     if (!selectedAction) return;
+
+    // Require comment if rejecting
+    if (action === "reject" && !galleyComment.trim()) {
+      toast.error("Please provide a comment explaining the requested changes");
+      return;
+    }
+
     setProcessing(true);
-    const toastId = toast.loading("Processing...");
+    const toastId = toast.loading("Submitting...");
+
+    const formData = new FormData();
+    formData.append("manuscript_id", selectedAction.id.toString());
+    formData.append("action", action);
+    formData.append("comment", galleyComment);
+    if (selectedFile) {
+      formData.append("final_file", selectedFile);
+    }
 
     try {
-      // Simulate API call – you need to implement a new endpoint like "updateGalleyProof"
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      toast.success(`Galley proof ${action === "approve" ? "approved" : "rejected"} successfully`, { id: toastId });
-      closeModal();
+      const res = await fetch(`${API_BASE}?action=updateGalleyProof`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Submission failed");
+
+      toast.success(`Galley proof ${action === "approve" ? "approved" : "changes requested"} successfully`, { id: toastId });
+
       // Refresh pending actions
-      const res = await fetch(`${API_BASE}?action=getPendingPrePublicationActions`);
-      if (res.ok) {
-        const data = await res.json();
-        setPendingActions(data);
+      const pendingRes = await fetch(`${API_BASE}?action=getPendingPrePublicationActions`);
+      if (pendingRes.ok) {
+        const pendingData = await pendingRes.json();
+        setPendingActions(pendingData);
       }
+
+      closeModal();
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
     } finally {
@@ -349,7 +379,7 @@ const AuthorDashboard = () => {
 
   const handlePayment = async () => {
     if (!selectedAction) return;
-    // For now, just show a message; you can integrate a payment gateway later
+    // Integrate payment gateway here
     toast.success("Redirecting to payment gateway...");
     closeModal();
   };
@@ -371,7 +401,6 @@ const AuthorDashboard = () => {
     );
   }
 
-  // KPI data array for mapping
   const kpiData = [
     { icon: FileText, label: "Total Submissions", value: stats?.totalSubmissions ?? 0 },
     { icon: Clock, label: "Under Review", value: stats?.underReview ?? 0 },
@@ -429,7 +458,7 @@ const AuthorDashboard = () => {
         </div>
       )}
 
-      {/* Redesigned KPI Cards (3 per row) */}
+      {/* KPI Cards */}
       <div style={styles.kpiGrid}>
         {kpiData.map((kpi, index) => {
           const Icon = kpi.icon;
@@ -447,7 +476,6 @@ const AuthorDashboard = () => {
               onMouseEnter={() => setHoveredKpi(index)}
               onMouseLeave={() => setHoveredKpi(null)}
               onClick={() => {
-                // Optionally navigate to relevant section when card clicked
                 if (kpi.label === "Total Submissions") navigate("/author/submissions");
                 else if (kpi.label === "Under Review") navigate("/author/submissions?filter=under_review");
                 else if (kpi.label === "Revisions Required") navigate("/author/revisions");
@@ -460,7 +488,6 @@ const AuthorDashboard = () => {
                 <div style={styles.kpiIconWrapper}>
                   <Icon size={24} />
                 </div>
-                {/* Optional: add a small trend indicator here */}
               </div>
               <h3 style={styles.kpiValue}>{kpi.value}</h3>
               <p style={styles.kpiLabel}>{kpi.label}</p>
@@ -469,7 +496,7 @@ const AuthorDashboard = () => {
         })}
       </div>
 
-      {/* Actions */}
+      {/* Author Actions */}
       <div style={styles.actionsPanel}>
         <div style={styles.sectionTitle}>Author Actions</div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -523,11 +550,10 @@ const AuthorDashboard = () => {
         )}
       </div>
 
-      {/* Modals */}
+      {/* Action Modal */}
       {modalOpen && selectedAction && (
         <div style={styles.modalOverlay} onClick={closeModal}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
             <div style={styles.modalHeader(selectedAction.actionType)}>
               <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                 {selectedAction.actionType === "galley" ? <FileCheck size={20} /> : <CreditCard size={20} />}
@@ -538,7 +564,6 @@ const AuthorDashboard = () => {
               </button>
             </div>
 
-            {/* Body */}
             <div style={styles.modalBody}>
               <p><strong>Manuscript:</strong> {selectedAction.title}</p>
               <p><strong>ID:</strong> {selectedAction.manuscriptId}</p>
@@ -565,9 +590,53 @@ const AuthorDashboard = () => {
                       </p>
                     </>
                   )}
-                  <p style={{ marginTop: 16 }}>
-                    Please review the galley proof. If you approve, it will be sent for publication. If you need changes, please provide comments.
-                  </p>
+
+                  {/* Author Response / Comment */}
+                  <div style={{ marginTop: "20px" }}>
+                    <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                      Your Response / Comments:
+                    </label>
+                    <textarea
+                      value={galleyComment}
+                      onChange={(e) => setGalleyComment(e.target.value)}
+                      placeholder="Add any comments here (required if requesting changes)..."
+                      rows={4}
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        fontSize: "0.95rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                  </div>
+
+                  {/* Final Manuscript Upload */}
+                  <div style={{ marginTop: "20px" }}>
+                    <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                      Upload Final Manuscript (optional):
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      style={{ marginBottom: "8px" }}
+                    />
+                    {selectedFile && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px", borderRadius: "8px" }}>
+                        <FileText size={16} />
+                        <span>{selectedFile.name}</span>
+                        <button
+                          onClick={() => setSelectedFile(null)}
+                          style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -580,7 +649,6 @@ const AuthorDashboard = () => {
               )}
             </div>
 
-            {/* Footer */}
             <div style={styles.modalFooter}>
               <button style={styles.buttonSecondary} onClick={closeModal} disabled={processing}>
                 Cancel

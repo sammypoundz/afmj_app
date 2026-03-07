@@ -1,40 +1,60 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { FC } from "react";
-import { Bell, Search, Settings, UserCircle, X } from "lucide-react";
+import { Bell, Search, Settings, UserCircle, X, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useNotifications } from "./useNotifications"; // <-- path to the hook
+import { useNotifications } from "./useNotifications";
+import debounce from "lodash/debounce";
+
+const API_BASE = "https://afmjonline.com/api/EICmanusciptsapi.php";
 
 const TopBar: FC = () => {
   const navigate = useNavigate();
-  const { unreadCount } = useNotifications(); // Live unread counter
+  const { unreadCount } = useNotifications();
 
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<{ id: number; title: string; author: string }[]>([]);
+  const [loading, setLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const mockManuscripts = [
-    { id: 101, title: "COVID-19 Vaccination Strategies", author: "Dr. Aisha Bello" },
-    { id: 102, title: "Urban Malaria Control Strategies", author: "Dr. Ibrahim Musa" },
-    { id: 103, title: "Maternal Health Outcomes in Lagos", author: "Dr. Aisha Bello" },
-  ];
+  // Debounced search function – stable across renders
+  const debouncedSearch = useMemo(
+    () =>
+      debounce(async (query: string) => {
+        if (!query || query.length < 2) {
+          setResults([]);
+          setDropdownOpen(false);
+          setLoading(false);
+          return;
+        }
 
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}?action=search&q=${encodeURIComponent(query)}`);
+          if (!res.ok) throw new Error("Search failed");
+          const data = await res.json();
+          setResults(data);
+          setDropdownOpen(data.length > 0);
+        } catch (err) {
+          console.error("Search error:", err);
+          setResults([]);
+          setDropdownOpen(false);
+        } finally {
+          setLoading(false);
+        }
+      }, 300),
+    [] // Empty deps – function never changes
+  );
+
+  // Trigger search when query changes
   useEffect(() => {
-    if (!search) {
-      setResults([]);
-      setDropdownOpen(false);
-      return;
-    }
-    const filtered = mockManuscripts.filter(
-      (m) =>
-        m.title.toLowerCase().includes(search.toLowerCase()) ||
-        m.author.toLowerCase().includes(search.toLowerCase()) ||
-        m.id.toString().includes(search)
-    );
-    setResults(filtered);
-    setDropdownOpen(filtered.length > 0);
-  }, [search]);
+    debouncedSearch(search);
+    return () => {
+      debouncedSearch.cancel(); // ✅ Now TypeScript knows about .cancel()
+    };
+  }, [search, debouncedSearch]);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -46,8 +66,14 @@ const TopBar: FC = () => {
   }, []);
 
   const handleSelectManuscript = (id: number) => {
-    navigate(`/manuscripts/${id}/logs`);
+    navigate(`/manuscripts/${id}`); // adjust route as needed
     setSearch("");
+    setDropdownOpen(false);
+  };
+
+  const clearSearch = () => {
+    setSearch("");
+    setResults([]);
     setDropdownOpen(false);
   };
 
@@ -90,11 +116,12 @@ const TopBar: FC = () => {
                 width: 200,
               }}
             />
-            {search && (
+            {loading && <Loader size={16} className="animate-spin" />}
+            {search && !loading && (
               <X
                 size={16}
                 style={{ cursor: "pointer" }}
-                onClick={() => setSearch("")}
+                onClick={clearSearch}
               />
             )}
           </div>
@@ -113,6 +140,7 @@ const TopBar: FC = () => {
                 maxHeight: 200,
                 overflowY: "auto",
                 zIndex: 1000,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
               }}
             >
               {results.map((m) => (
@@ -123,7 +151,10 @@ const TopBar: FC = () => {
                     padding: 8,
                     cursor: "pointer",
                     borderBottom: "1px solid #f3f4f6",
+                    transition: "background 0.2s",
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
                 >
                   <div style={{ fontWeight: 600 }}>{m.title}</div>
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
@@ -170,12 +201,12 @@ const TopBar: FC = () => {
         </button>
 
         {/* Settings */}
-        <button
+        {/* <button
           onClick={() => navigate("/eic/settings")}
           style={{ background: "transparent", border: "none", cursor: "pointer" }}
         >
           <Settings size={18} />
-        </button>
+        </button> */}
 
         {/* Profile */}
         <div
