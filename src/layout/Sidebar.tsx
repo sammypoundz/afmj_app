@@ -8,8 +8,8 @@ import { eicMenu } from "./EICSidebar";
 const labelToApiKey: Record<string, string> = {
   "New Submissions": "newSubmissions",
   "Under Review": "underReview",
-  "Revision Requested": "revisionRequested",  // new
-  "Revised": "revised",                       // new
+  "Revision Requested": "revisionRequested",
+  "Revised": "revised",
   "Accepted": "accepted",
   "Rejected": "rejected",
   "Published": "published",
@@ -23,8 +23,8 @@ const labelToApiKey: Record<string, string> = {
 const attentionLabels = new Set([
   "New Submissions",
   "Under Review",
-  "Revision Requested",  // new
-  "Revised",             // new
+  "Revision Requested",
+  "Revised",
   "Accepted",
   "Rejected",
   "Published",
@@ -93,19 +93,17 @@ const Sidebar: FC = () => {
                 .replace(/\s+/g, "-")}`;
             }
 
+            /* Publications */
+            else if (group.section === "Publications") {
+              if (item.label === "Published") path = "/publications/published";
+              else if (item.label === "Publication Decision") path = "/publications/decision";
+            }
+
             /* Users */
             else if (group.section === "Users") {
               if (item.label === "Reviewers") path = "/users/reviewers";
               else if (item.label === "Editors") path = "/users/editors";
               else if (item.label === "Authors") path = "/users/authors";
-            }
-
-            /* Publications */
-            else if (group.section === "Publications") {
-              if (item.label === "Journal Issues") path = "/publications/issues";
-              else if (item.label === "Create Issue") path = "/publications/create";
-              else if (item.label === "Publication Decision")
-                path = "/publications/decision";
             }
 
             /* System */

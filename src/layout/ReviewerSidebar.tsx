@@ -1,21 +1,43 @@
-import type { FC } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { reviewerMenu } from "./reviewerMenu";
 
-const counters: Record<string, number> = {
-  Invitations: 2,
-  "Active Reviews": 4,
-  Revisions: 1,
-  Overdue: 1,
-};
+// Define the shape of data returned by getDashboardStats
+interface DashboardStats {
+  invitations: number;
+  active: number;
+  revisions: number;
+  completed: number;
+  overdue: number;
+}
 
-const ReviewerSidebar: FC = () => {
+const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+
+const ReviewerSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Fetch dashboard statistics on component mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${API_BASE}?action=getDashboardStats`);
+        if (!response.ok) throw new Error("Failed to fetch stats");
+        const data: DashboardStats = await response.json();
+        setStats(data);
+      } catch (err) {
+        console.error("Error fetching dashboard stats:", err);
+        // Optionally show a fallback or retry
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Map menu labels to routes
   const getPath = (label: string) => {
     switch (label) {
       case "Dashboard":
@@ -35,11 +57,29 @@ const ReviewerSidebar: FC = () => {
     }
   };
 
+  // Return the appropriate counter for a given menu label
+  const getCount = (label: string): number => {
+    if (!stats) return 0;
+    switch (label) {
+      case "Invitations":
+        return stats.invitations;
+      case "Active Reviews":
+        return stats.active;
+      case "Revisions":
+        return stats.revisions;
+      case "Overdue":
+        return stats.overdue;
+      case "Completed":
+        return stats.completed;
+      default:
+        return 0;
+    }
+  };
+
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="sidebar-header">
         {!collapsed && <h2 className="logo">AMJ • Reviewer</h2>}
-
         <button
           className="collapse-btn"
           onClick={() => setCollapsed(!collapsed)}
@@ -56,7 +96,7 @@ const ReviewerSidebar: FC = () => {
             const Icon = item.icon;
             const path = getPath(item.label);
             const isActive = location.pathname.startsWith(path);
-            const count = counters[item.label] || 0;
+            const count = getCount(item.label);
 
             return (
               <div

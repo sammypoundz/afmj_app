@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -5,73 +6,105 @@ import {
   UploadCloud,
   RefreshCcw,
   BookOpen,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const AuthorSidebar = () => {
+  const [collapsed, setCollapsed] = useState(false);
+
   const linkStyle = ({ isActive }: { isActive: boolean }) => ({
-    padding: "10px 14px",
+    padding: collapsed ? "12px" : "10px 14px",
     borderRadius: 8,
     textDecoration: "none",
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    justifyContent: collapsed ? "center" : "flex-start",
+    gap: collapsed ? 0 : 10,
     marginBottom: 6,
     background: isActive ? "#dcfce7" : "transparent",
     color: isActive ? "#15803d" : "#334155",
     fontWeight: 600,
     transition: "all .2s ease",
+    whiteSpace: "nowrap" as const,
   });
+
+  const sidebarWidth = collapsed ? 80 : 260;
 
   return (
     <aside
       style={{
-        width: 260,
-        padding: 24,
+        width: sidebarWidth,
+        padding: collapsed ? "16px 8px" : 24,
         borderRight: "1px solid rgba(22,163,74,0.12)",
         background: "linear-gradient(180deg,#ffffff,#f6fef9)",
         minHeight: "100vh",
+        transition: "width 0.2s ease, padding 0.2s ease",
+        position: "relative",
+        overflowX: "hidden",
       }}
     >
-      <h3
+      <div
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "space-between",
           marginBottom: 32,
-          fontWeight: 700,
-          color: "#0f172a",
         }}
       >
-        Author Panel
-      </h3>
+        {!collapsed && (
+          <h3
+            style={{
+              fontWeight: 700,
+              color: "#0f172a",
+              margin: 0,
+            }}
+          >
+            Author Panel
+          </h3>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "#16a34a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 4,
+          }}
+        >
+          {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+        </button>
+      </div>
 
       <nav>
         <NavLink to="/author/dashboard" style={linkStyle}>
           <LayoutDashboard size={18} />
-          Dashboard
+          {!collapsed && "Dashboard"}
         </NavLink>
-
         <NavLink to="/author/submissions" style={linkStyle}>
           <FileText size={18} />
-          My Submissions
+          {!collapsed && "My Submissions"}
         </NavLink>
-
         <NavLink to="/author/submit" style={linkStyle}>
           <UploadCloud size={18} />
-          Submit Manuscript
+          {!collapsed && "Submit Manuscript"}
         </NavLink>
-
         <NavLink to="/author/revisions" style={linkStyle}>
           <RefreshCcw size={18} />
-          Revisions
+          {!collapsed && "Revisions"}
         </NavLink>
-
         <NavLink to="/author/published" style={linkStyle}>
           <BookOpen size={18} />
-          Published
+          {!collapsed && "Published"}
         </NavLink>
-
         <NavLink to="/author/profile" style={linkStyle}>
           <User size={18} />
-          Profile
+          {!collapsed && "Profile"}
         </NavLink>
       </nav>
     </aside>

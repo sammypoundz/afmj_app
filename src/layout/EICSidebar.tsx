@@ -10,7 +10,6 @@ import {
   UserCheck,
   UserPlus,
   BookOpen,
-  PlusSquare,
   BarChart3,
   Settings,
   Shield,
@@ -27,30 +26,27 @@ export const eicMenu = [
     items: [
       { label: "New Submissions", icon: Inbox },
       { label: "Under Review", icon: Clock },
-      { label: "Revision Requested", icon: RefreshCcw },   // new
-      { label: "Revised", icon: CheckCircle },             // new (you can replace with a different icon if desired)
+      { label: "Revision Requested", icon: RefreshCcw },
+      { label: "Revised", icon: CheckCircle },
       { label: "Accepted", icon: CheckCircle },
       { label: "Rejected", icon: XCircle },
-      { label: "Published", icon: UploadCloud },
-    ],
-  },
-
-  // Users
-  {
-    section: "Users",
-    items: [
-      { label: "Reviewers", icon: Users },
-      { label: "Editors", icon: UserCheck },
-      { label: "Authors", icon: UserPlus },
     ],
   },
 
   {
     section: "Publications",
     items: [
-      { label: "Journal Issues", icon: BookOpen },
-      { label: "Create Issue", icon: PlusSquare },
       { label: "Publication Decision", icon: CheckCircle },
+      { label: "Published", icon: UploadCloud },
+    ],
+  },
+
+  {
+    section: "Users",
+    items: [
+      { label: "Reviewers", icon: Users },
+      { label: "Editors", icon: UserCheck },
+      { label: "Authors", icon: UserPlus },
     ],
   },
 
