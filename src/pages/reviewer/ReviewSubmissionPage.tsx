@@ -4,7 +4,6 @@ import toast, { Toaster } from "react-hot-toast";
 import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip } from "lucide-react";
 
 const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
-const UPLOAD_URL = "https://afmjonline.com/api/upload.php"; // adjust if needed
 
 // Spinner component (green theme)
 const Spinner = ({ size = 20, color = "#16a34a" }) => (
@@ -36,7 +35,6 @@ const ReviewSubmissionPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [manuscriptInfo, setManuscriptInfo] = useState<{ manuscriptId: string; title: string } | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [reviewId, setReviewId] = useState<number | null>(null);
@@ -65,7 +63,6 @@ const ReviewSubmissionPage = () => {
       setLoading(true);
 
       try {
-        // Fetch manuscript preview using review_id
         const res = await fetch(`${API_BASE}?action=getManuscriptPreview&review_id=${revId}`);
         const data = await res.json();
         if (!res.ok) {
@@ -93,15 +90,6 @@ const ReviewSubmissionPage = () => {
     setScores({ ...scores, [field]: value });
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch(UPLOAD_URL, { method: "POST", body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Upload failed");
-    return data.path;
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setAttachmentFile(e.target.files[0]);
@@ -117,42 +105,37 @@ const ReviewSubmissionPage = () => {
       toast.error("No review ID available – cannot submit");
       return;
     }
+
     setSubmitting(true);
-    let attachmentPath = null;
+    const toastId = toast.loading("Submitting review...");
+
+    const formData = new FormData();
+    formData.append("review_id", reviewId.toString());
+    formData.append("originality", scores.originality.toString());
+    formData.append("methodology", scores.methodology.toString());
+    formData.append("clarity", scores.clarity.toString());
+    formData.append("relevance", scores.relevance.toString());
+    formData.append("commentsToAuthor", commentsToAuthor);
+    formData.append("confidentialComments", confidentialComments);
+    formData.append("recommendation", recommendation.toLowerCase().replace(" ", "_"));
+    if (attachmentFile) {
+      formData.append("attachment", attachmentFile);
+    }
 
     try {
-      if (attachmentFile) {
-        setUploading(true);
-        toast.loading("Uploading attachment...", { id: "upload" });
-        attachmentPath = await uploadFile(attachmentFile);
-        toast.success("Attachment uploaded", { id: "upload" });
-        setUploading(false);
-      }
-
       const res = await fetch(`${API_BASE}?action=submitReview`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          review_id: reviewId,
-          originality: scores.originality,
-          methodology: scores.methodology,
-          clarity: scores.clarity,
-          relevance: scores.relevance,
-          commentsToAuthor,
-          confidentialComments,
-          recommendation: recommendation.toLowerCase().replace(" ", "_"),
-          attachment_path: attachmentPath,
-        }),
+        body: formData,
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("Review submitted successfully!");
+        toast.success("Review submitted successfully!", { id: toastId });
         navigate("/reviewer/active");
       } else {
-        toast.error(data.error || "Submission failed");
+        toast.error(data.error || "Submission failed", { id: toastId });
       }
     } catch (err) {
-      toast.error("Network error");
+      toast.error("Network error", { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +159,6 @@ const ReviewSubmissionPage = () => {
       <GlobalStyles />
       <Toaster position="top-right" />
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "24px 16px" }}>
-        {/* Header with larger back button */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px" }}>
           <button
             onClick={goBack}
@@ -364,7 +346,7 @@ const ReviewSubmissionPage = () => {
           <input
             type="file"
             onChange={handleFileChange}
-            disabled={uploading}
+            disabled={submitting}
             style={{
               width: "100%",
               padding: "10px",
@@ -421,28 +403,28 @@ const ReviewSubmissionPage = () => {
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={submitting || uploading || !reviewId}
+          disabled={submitting || !reviewId}
           style={{
             width: "100%",
             padding: "16px",
             borderRadius: "40px",
             border: "none",
-            background: submitting || uploading || !reviewId ? "#9ca3af" : "#16a34a",
+            background: submitting || !reviewId ? "#9ca3af" : "#16a34a",
             color: "#fff",
             fontSize: "1rem",
             fontWeight: 600,
-            cursor: submitting || uploading || !reviewId ? "not-allowed" : "pointer",
+            cursor: submitting || !reviewId ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             transition: "background 0.2s",
-            boxShadow: submitting || uploading || !reviewId ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
+            boxShadow: submitting || !reviewId ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
           }}
-          onMouseEnter={(e) => !submitting && !uploading && reviewId && (e.currentTarget.style.background = "#0d9488")}
-          onMouseLeave={(e) => !submitting && !uploading && reviewId && (e.currentTarget.style.background = "#16a34a")}
+          onMouseEnter={(e) => !submitting && reviewId && (e.currentTarget.style.background = "#0d9488")}
+          onMouseLeave={(e) => !submitting && reviewId && (e.currentTarget.style.background = "#16a34a")}
         >
-          {submitting || uploading ? <Spinner size={20} color="#fff" /> : "Submit Review"}
+          {submitting ? <Spinner size={20} color="#fff" /> : "Submit Review"}
         </button>
       </div>
     </>
