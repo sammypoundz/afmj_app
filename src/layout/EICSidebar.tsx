@@ -10,7 +10,7 @@ import {
   UserCheck,
   UserPlus,
   BarChart3,
-  Settings,
+  // Settings,
   Shield,
 } from "lucide-react";
 
