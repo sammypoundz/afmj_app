@@ -122,7 +122,7 @@ const styles = {
 
 const AuthorProfile = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<ProfileData | null>(null); // ✅ fixed
+  const [setProfile] = useState<ProfileData | null>(null); // ✅ fixed
   const [formData, setFormData] = useState({
     name: "",
     email: "",
