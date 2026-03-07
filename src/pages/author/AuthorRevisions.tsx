@@ -10,12 +10,13 @@ import {
   Clock,
   User,
   AlertCircle,
+  MessageSquare,
+  CheckCircle,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
-// Types
 interface RevisionEntry {
   entry_id: number;
   revision_id: number;
@@ -37,7 +38,6 @@ interface ManuscriptRevision {
   revisionEntries: RevisionEntry[];
 }
 
-// Styles
 const styles = {
   page: {
     maxWidth: "1000px",
@@ -245,9 +245,34 @@ const styles = {
     border: "1px solid #e2e8f0",
     color: "#64748b",
   },
+  messageArea: {
+    marginBottom: "16px",
+  },
+  messageInput: {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #e2e8f0",
+    fontSize: "0.95rem",
+    resize: "vertical" as const,
+    minHeight: "80px",
+    fontFamily: "inherit",
+  },
+  submittedMessage: {
+    background: "#f0fdf4",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #16a34a",
+    marginTop: "8px",
+    color: "#166534",
+  },
+  allAddressedMessage: {
+    marginTop: "20px",
+    textAlign: "center" as const,
+    color: "#16a34a",
+  },
 };
 
-// Helper for entry status badge styles
 const entryStatusBadge = (addressed: boolean) => ({
   background: addressed ? "#dcfce7" : "#fef9c3",
   color: addressed ? "#16a34a" : "#eab308",
@@ -267,6 +292,7 @@ const AuthorRevisions = () => {
   const [files, setFiles] = useState<{
     [manuscriptId: number]: { revised: File | null; response: File | null };
   }>({});
+  const [responseMessages, setResponseMessages] = useState<{ [key: number]: string }>({});
   const [submitting, setSubmitting] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
@@ -318,10 +344,20 @@ const AuthorRevisions = () => {
     }));
   };
 
+  const handleResponseMessageChange = (manuscriptId: number, message: string) => {
+    setResponseMessages((prev) => ({ ...prev, [manuscriptId]: message }));
+  };
+
   const handleSubmit = async (manuscriptId: number) => {
     const manuscriptFiles = files[manuscriptId];
+    const message = responseMessages[manuscriptId]?.trim();
+
     if (!manuscriptFiles?.revised) {
       toast.error("Please upload the revised manuscript");
+      return;
+    }
+    if (!message) {
+      toast.error("Please enter your response to the reviewer");
       return;
     }
 
@@ -330,6 +366,7 @@ const AuthorRevisions = () => {
 
     const formData = new FormData();
     formData.append("manuscript_id", manuscriptId.toString());
+    formData.append("response_message", message);
     formData.append("revised_file", manuscriptFiles.revised);
     if (manuscriptFiles.response) {
       formData.append("response_file", manuscriptFiles.response);
@@ -344,10 +381,10 @@ const AuthorRevisions = () => {
       if (!res.ok) throw new Error(result.error || "Submission failed");
 
       toast.success("Revision submitted successfully!", { id: toastId });
-      // Refresh the list
-      fetchRevisions();
-      // Clear files for this manuscript
+      await fetchRevisions(); // Refresh the list
+      // Clear files and message for this manuscript
       setFiles((prev) => ({ ...prev, [manuscriptId]: { revised: null, response: null } }));
+      setResponseMessages((prev) => ({ ...prev, [manuscriptId]: "" }));
       setExpandedManuscriptId(null);
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
@@ -416,8 +453,8 @@ const AuthorRevisions = () => {
           const man = item.manuscript;
           const isExpanded = expandedManuscriptId === man.id;
           const isSubmitting = submitting[man.id] || false;
-          const manuscriptFiles = files[man.id] || { revised: null, response: null };
-          const pendingCount = item.revisionEntries.length;
+          const hasPending = item.revisionEntries.some(entry => !entry.addressed);
+          const pendingCount = item.revisionEntries.filter(entry => !entry.addressed).length;
 
           return (
             <div key={man.id} style={styles.card}>
@@ -445,9 +482,10 @@ const AuthorRevisions = () => {
                 </div>
               </div>
 
-              {/* Expanded comments */}
+              {/* Expanded content */}
               {isExpanded && (
                 <div style={styles.commentsSection}>
+                  {/* Revision entries */}
                   {item.revisionEntries.map((entry) => (
                     <div key={entry.entry_id} style={styles.commentCard}>
                       <div style={styles.commentHeader}>
@@ -463,106 +501,132 @@ const AuthorRevisions = () => {
                       </div>
                       <p style={styles.commentText}>{entry.reviewer_comment}</p>
                       {entry.author_response && (
-                        <div style={styles.responseText}>
-                          <strong>Your previous response:</strong> {entry.author_response}
+                        <div style={styles.submittedMessage}>
+                          <strong>Your response:</strong> {entry.author_response}
                         </div>
                       )}
                     </div>
                   ))}
 
-                  {/* Upload section */}
-                  <div style={styles.uploadSection}>
-                    <h4 style={{ marginBottom: "12px", color: "#0f172a" }}>
-                      Submit Your Revision
-                    </h4>
+                  {/* If there are pending entries, show the submission form */}
+                  {hasPending ? (
+                    <div style={styles.uploadSection}>
+                      <h4 style={{ marginBottom: "12px", color: "#0f172a" }}>
+                        Submit Your Revision
+                      </h4>
 
-                    {/* Revised manuscript file */}
-                    <input
-                      type="file"
-                      id={`revised-${man.id}`}
-                      accept=".pdf,.doc,.docx"
-                      style={styles.fileInput}
-                      onChange={(e) =>
-                        handleFileChange(man.id, "revised", e.target.files?.[0] || null)
-                      }
-                    />
-                    {!manuscriptFiles.revised ? (
-                      <div
-                        style={styles.fileArea}
-                        onClick={() => document.getElementById(`revised-${man.id}`)?.click()}
-                      >
-                        <Upload size={24} color="#94a3b8" />
-                        <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-                          Click to upload revised manuscript
-                        </p>
+                      {/* Response message (required) */}
+                      <div style={styles.messageArea}>
+                        <label style={{ fontWeight: 500, marginBottom: "4px", display: "block" }}>
+                          <MessageSquare size={16} style={{ marginRight: "4px" }} />
+                          Your response to reviewer *
+                        </label>
+                        <textarea
+                          value={responseMessages[man.id] || ""}
+                          onChange={(e) => handleResponseMessageChange(man.id, e.target.value)}
+                          placeholder="Explain how you've addressed the reviewer's comments..."
+                          style={styles.messageInput}
+                          disabled={isSubmitting}
+                          required
+                        />
                       </div>
-                    ) : (
-                      <div style={styles.fileName}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <FileText size={16} />
-                          {manuscriptFiles.revised.name}
-                        </span>
-                        <button
-                          style={styles.removeFileBtn}
-                          onClick={() => removeFile(man.id, "revised")}
+
+                      {/* Revised manuscript file */}
+                      <input
+                        type="file"
+                        id={`revised-${man.id}`}
+                        accept=".pdf,.doc,.docx"
+                        style={styles.fileInput}
+                        onChange={(e) =>
+                          handleFileChange(man.id, "revised", e.target.files?.[0] || null)
+                        }
+                      />
+                      {!files[man.id]?.revised ? (
+                        <div
+                          style={styles.fileArea}
+                          onClick={() => document.getElementById(`revised-${man.id}`)?.click()}
                         >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
+                          <Upload size={24} color="#94a3b8" />
+                          <p style={{ margin: "8px 0 0", color: "#64748b" }}>
+                            Click to upload revised manuscript *
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={styles.fileName}>
+                          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FileText size={16} />
+                            {files[man.id].revised!.name}
+                          </span>
+                          <button
+                            style={styles.removeFileBtn}
+                            onClick={() => removeFile(man.id, "revised")}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
 
-                    {/* Response letter file */}
-                    <input
-                      type="file"
-                      id={`response-${man.id}`}
-                      accept=".pdf,.doc,.docx,.txt"
-                      style={styles.fileInput}
-                      onChange={(e) =>
-                        handleFileChange(man.id, "response", e.target.files?.[0] || null)
-                      }
-                    />
-                    {!manuscriptFiles.response ? (
-                      <div
-                        style={styles.fileArea}
-                        onClick={() => document.getElementById(`response-${man.id}`)?.click()}
-                      >
-                        <Upload size={24} color="#94a3b8" />
-                        <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-                          Upload response to reviewers (optional)
-                        </p>
-                      </div>
-                    ) : (
-                      <div style={styles.fileName}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <FileText size={16} />
-                          {manuscriptFiles.response.name}
-                        </span>
-                        <button
-                          style={styles.removeFileBtn}
-                          onClick={() => removeFile(man.id, "response")}
+                      {/* Response letter file (optional) */}
+                      <input
+                        type="file"
+                        id={`response-${man.id}`}
+                        accept=".pdf,.doc,.docx,.txt"
+                        style={styles.fileInput}
+                        onChange={(e) =>
+                          handleFileChange(man.id, "response", e.target.files?.[0] || null)
+                        }
+                      />
+                      {!files[man.id]?.response ? (
+                        <div
+                          style={styles.fileArea}
+                          onClick={() => document.getElementById(`response-${man.id}`)?.click()}
                         >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
+                          <Upload size={24} color="#94a3b8" />
+                          <p style={{ margin: "8px 0 0", color: "#64748b" }}>
+                            Upload response letter (optional)
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={styles.fileName}>
+                          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <FileText size={16} />
+                            {files[man.id].response!.name}
+                          </span>
+                          <button
+                            style={styles.removeFileBtn}
+                            onClick={() => removeFile(man.id, "response")}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
 
-                    <button
-                      onClick={() => handleSubmit(man.id)}
-                      disabled={isSubmitting}
-                      style={{
-                        ...styles.submitButton,
-                        ...(isSubmitting ? styles.submitButtonDisabled : {}),
-                      }}
-                      onMouseEnter={(e) =>
-                        !isSubmitting && (e.currentTarget.style.background = "#0d9488")
-                      }
-                      onMouseLeave={(e) =>
-                        !isSubmitting && (e.currentTarget.style.background = "#16a34a")
-                      }
-                    >
-                      {isSubmitting ? "Submitting..." : "Submit Revision"}
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => handleSubmit(man.id)}
+                        disabled={isSubmitting}
+                        style={{
+                          ...styles.submitButton,
+                          ...(isSubmitting ? styles.submitButtonDisabled : {}),
+                        }}
+                        onMouseEnter={(e) =>
+                          !isSubmitting && (e.currentTarget.style.background = "#0d9488")
+                        }
+                        onMouseLeave={(e) =>
+                          !isSubmitting && (e.currentTarget.style.background = "#16a34a")
+                        }
+                      >
+                        {isSubmitting ? "Submitting..." : "Submit Revision"}
+                      </button>
+                    </div>
+                  ) : (
+                    // All comments addressed – show a message
+                    <div style={styles.allAddressedMessage}>
+                      <CheckCircle size={32} color="#16a34a" />
+                      <p style={{ marginTop: "8px", fontWeight: 500 }}>
+                        All revisions have been submitted.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
