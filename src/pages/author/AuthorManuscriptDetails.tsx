@@ -2,17 +2,17 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  FileText,
+  // FileText,
   Calendar,
   User,
   Clock,
   Download,
   Mail,
   CheckCircle,
-  XCircle,
+  // XCircle,
   AlertCircle,
-  RefreshCcw,
-  Eye
+  RefreshCcw
+  // Eye
 } from "lucide-react";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";

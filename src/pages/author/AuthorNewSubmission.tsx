@@ -6,7 +6,7 @@ import {
   X,
   FileText,
   CheckCircle,
-  Circle,
+  // Circle,
   ChevronRight,
   ChevronLeft,
 } from "lucide-react";

@@ -9,7 +9,6 @@ import {
   Users,
   UserCheck,
   UserPlus,
-  BookOpen,
   BarChart3,
   Settings,
   Shield,

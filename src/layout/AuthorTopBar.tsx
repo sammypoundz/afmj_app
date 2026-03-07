@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, X, CheckCheck, ExternalLink } from "lucide-react";
+import { Bell, CheckCheck, ExternalLink } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";

@@ -122,7 +122,7 @@ const styles = {
 
 const AuthorProfile = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null); // ✅ fixed
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -145,7 +145,7 @@ const AuthorProfile = () => {
         throw new Error(err.error || "Failed to load profile");
       }
       const data = await res.json();
-      setProfile(data);
+      setProfile(data);                // ✅ now works
       setFormData({
         name: data.name || "",
         email: data.email || "",
@@ -196,8 +196,7 @@ const AuthorProfile = () => {
       }
 
       toast.success("Profile updated successfully!", { id: toastId });
-      // Refresh profile data
-      fetchProfile();
+      fetchProfile(); // refresh data
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
     } finally {
