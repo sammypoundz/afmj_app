@@ -122,7 +122,6 @@ const styles = {
 
 const AuthorProfile = () => {
   const navigate = useNavigate();
-  const [setProfile] = useState<ProfileData | null>(null); // ✅ fixed
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -144,8 +143,7 @@ const AuthorProfile = () => {
         const err = await res.json();
         throw new Error(err.error || "Failed to load profile");
       }
-      const data = await res.json();
-      setProfile(data);                // ✅ now works
+      const data: ProfileData = await res.json(); // ✅ typed
       setFormData({
         name: data.name || "",
         email: data.email || "",
