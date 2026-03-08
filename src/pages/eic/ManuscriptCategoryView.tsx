@@ -16,6 +16,8 @@ import {
   ChevronRight,
   RotateCcw,
   History,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -105,9 +107,8 @@ interface Editor {
   name: string;
 }
 
-type ReviewStatus = "not_opened" | "reviewing" | "reviewed";
+type ReviewStatus = "not_opened" | "reviewing" | "reviewed" | "expired";
 
-// MODIFIED: added more fields from backend
 interface ReviewerProgress {
   reviewer: string;
   reviewerId: number;
@@ -159,7 +160,6 @@ const leaveGlass = (e: React.MouseEvent<HTMLButtonElement>) => {
   (e.currentTarget as HTMLButtonElement).style.background = "rgba(255, 255, 255, 0.1)";
 };
 
-// NEW: check if a review is expired
 const isReviewExpired = (progress: ReviewerProgress): boolean => {
   if (progress.status === 'reviewed') return false;
   if (!progress.dueDate) return false;
@@ -168,7 +168,6 @@ const isReviewExpired = (progress: ReviewerProgress): boolean => {
   return now > due;
 };
 
-// NEW: format remaining time
 const formatRemainingTime = (dueDate: string): string => {
   const now = new Date();
   const due = new Date(dueDate);
@@ -275,12 +274,12 @@ const Pagination: FC<PaginationProps> = ({
   );
 };
 
-/* ================= Reviewer Modal (modified) ================= */
+/* ================= Reviewer Modal (with ordering) ================= */
 interface ReviewerModalProps {
   reviewers: Reviewer[];
-  currentReviewers: string[];      // initial selected reviewers
+  currentReviewers: string[];      // initial selected reviewers (ordered)
   onClose: () => void;
-  onTempSave: (selected: string[]) => void;   // no API call, just returns selection
+  onTempSave: (selected: string[]) => void;   // returns ordered array
 }
 
 const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
@@ -292,17 +291,31 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
   const [selected, setSelected] = useState<string[]>([...currentReviewers]);
   const maxReviewers = 3;
 
-  const toggleReviewer = (name: string) => {
-    setSelected(prev => {
-      if (prev.includes(name)) {
-        return prev.filter(r => r !== name);
-      }
-      if (prev.length >= maxReviewers) {
+  const addReviewer = (name: string) => {
+    if (selected.includes(name)) {
+      // Remove if already selected
+      setSelected(prev => prev.filter(r => r !== name));
+    } else {
+      if (selected.length >= maxReviewers) {
         alert(`You can only select up to ${maxReviewers} reviewers.`);
-        return prev;
+        return;
       }
-      return [...prev, name];
-    });
+      setSelected(prev => [...prev, name]);
+    }
+  };
+
+  const moveUp = (index: number) => {
+    if (index === 0) return;
+    const newSelected = [...selected];
+    [newSelected[index - 1], newSelected[index]] = [newSelected[index], newSelected[index - 1]];
+    setSelected(newSelected);
+  };
+
+  const moveDown = (index: number) => {
+    if (index === selected.length - 1) return;
+    const newSelected = [...selected];
+    [newSelected[index], newSelected[index + 1]] = [newSelected[index + 1], newSelected[index]];
+    setSelected(newSelected);
   };
 
   const canSave = selected.length === maxReviewers;
@@ -339,6 +352,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
           </button>
         </div>
 
+        {/* Grid of all reviewers */}
         <div
           style={{
             display: "grid",
@@ -353,7 +367,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
             return (
               <div
                 key={r.id}
-                onClick={() => !isDisabled && toggleReviewer(r.name)}
+                onClick={() => !isDisabled && addReviewer(r.name)}
                 style={{
                   padding: "12px",
                   borderRadius: "8px",
@@ -374,6 +388,53 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
             );
           })}
         </div>
+
+        {/* Ordered list of selected reviewers */}
+        {selected.length > 0 && (
+          <div style={{ marginTop: "24px" }}>
+            <h4>Selected Reviewers (in order of assignment)</h4>
+            {selected.map((name, index) => (
+              <div
+                key={name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "8px",
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                <span style={{ fontWeight: "bold", width: "24px" }}>{index + 1}.</span>
+                <span style={{ flex: 1 }}>{name}</span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button
+                    onClick={() => moveUp(index)}
+                    disabled={index === 0}
+                    style={{ background: "none", border: "none", cursor: index === 0 ? "not-allowed" : "pointer", opacity: index === 0 ? 0.5 : 1 }}
+                    title="Move Up"
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => moveDown(index)}
+                    disabled={index === selected.length - 1}
+                    style={{ background: "none", border: "none", cursor: index === selected.length - 1 ? "not-allowed" : "pointer", opacity: index === selected.length - 1 ? 0.5 : 1 }}
+                    title="Move Down"
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                  <button
+                    onClick={() => setSelected(prev => prev.filter((_, i) => i !== index))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                    title="Remove"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
           <button
@@ -438,7 +499,6 @@ const SingleReviewerModal: FC<SingleReviewerModalProps> = ({
     onClose();
   };
 
-  // Filter out current reviewer
   const availableReviewers = reviewers.filter(r => r.id !== currentReviewerId);
 
   return (
@@ -510,7 +570,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
 }) => {
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedRevisions, setExpandedRevisions] = useState<number[]>([0]); // First revision expanded by default
+  const [expandedRevisions, setExpandedRevisions] = useState<number[]>([0]);
   const [refreshing, setRefreshing] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassigning, setReassigning] = useState(false);
@@ -571,15 +631,12 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
 
   const revisions = manuscript.revisions || [];
   const hasRevisions = revisions.length > 0;
-
-  // Find the latest revision (highest revisionNumber)
   const latestRevision = revisions.length > 0
     ? revisions.reduce((latest, rev) =>
         rev.revisionNumber > latest.revisionNumber ? rev : latest
       , revisions[0])
     : null;
 
-  // Check if latest revision is complete: no pending entries and both files exist
   const hasPending = latestRevision
     ? latestRevision.entries.some(e => !e.addressed)
     : false;
@@ -617,7 +674,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
           position: "relative",
         }}
       >
-        {/* Close Button */}
         <button
           onClick={onClose}
           style={{
@@ -634,7 +690,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
           <X size={24} />
         </button>
 
-        {/* Header */}
         <div style={{ marginBottom: "24px", paddingRight: "40px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
             <History size={28} color="#f59e0b" />
@@ -658,7 +713,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
           </p>
         </div>
 
-        {/* No Revisions State */}
         {!hasRevisions && (
           <div
             style={{
@@ -675,7 +729,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
           </div>
         )}
 
-        {/* Revisions Timeline */}
         {hasRevisions && (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {revisions.map((rev, index) => {
@@ -695,7 +748,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                     boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                   }}
                 >
-                  {/* Revision Header - Clickable */}
                   <div
                     onClick={() => toggleRevision(index)}
                     style={{
@@ -765,10 +817,8 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Expanded Content */}
                   {isExpanded && (
                     <div style={{ padding: "20px" }}>
-                      {/* Files Section */}
                       <div
                         style={{
                           display: "flex",
@@ -832,7 +882,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                         )}
                       </div>
 
-                      {/* Reviewer Comments & Author Responses */}
                       {rev.entries && rev.entries.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                           <h4
@@ -861,7 +910,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                                 boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                               }}
                             >
-                              {/* Reviewer Info */}
                               <div
                                 style={{
                                   padding: "12px 16px",
@@ -922,9 +970,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                                 </span>
                               </div>
 
-                              {/* Comment & Response */}
                               <div style={{ padding: "16px" }}>
-                                {/* Reviewer Comment */}
                                 <div style={{ marginBottom: "16px" }}>
                                   <div
                                     style={{
@@ -959,7 +1005,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                                   </div>
                                 </div>
 
-                                {/* Author Response */}
                                 <div>
                                   <div
                                     style={{
@@ -1018,7 +1063,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
           </div>
         )}
 
-        {/* Footer Actions */}
         <div
           style={{
             marginTop: "24px",
@@ -1052,7 +1096,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
               Refresh
             </button>
 
-            {/* Reassign to Pending Reviewers button */}
             <button
               onClick={() => setShowReassignModal(true)}
               disabled={!canReassign || reassigning}
@@ -1094,7 +1137,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
         </div>
       </div>
 
-      {/* Reassign Modal */}
       {showReassignModal && (
         <ReviewerSelectionModal
           reviewers={allReviewers}
@@ -1112,7 +1154,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
             });
             setReassigning(false);
             setShowReassignModal(false);
-            onUpdated(); // reload revision data
+            onUpdated();
           }}
         />
       )}
@@ -1120,7 +1162,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
   );
 };
 
-/* ================= Manuscript Modal (with detailed reviewer feedback) ================= */
+/* ================= Manuscript Modal ================= */
 interface ModalProps {
   manuscriptId: number;
   onClose: () => void;
@@ -1137,12 +1179,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const [loading, setLoading] = useState(true);
   const [btnLoading, setBtnLoading] = useState<string | null>(null);
   const [productionLoading, setProductionLoading] = useState(false);
-
-  // NEW: temporary states for editor and reviewers
   const [tempEditorId, setTempEditorId] = useState<number | null>(null);
   const [tempReviewers, setTempReviewers] = useState<string[]>([]);
-
-  // NEW: state for reassign target
   const [reassignTarget, setReassignTarget] = useState<{ manuscriptId: number; oldReviewerId: number; oldReviewerName: string } | null>(null);
 
   useEffect(() => {
@@ -1158,8 +1196,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         setManuscript(m);
         setReviewers(rvs);
         setEditors(eds);
-        setTempEditorId(m.editorId || null);          // initialise temp
-        setTempReviewers(m.reviewers || []);          // initialise temp
+        setTempEditorId(m.editorId || null);
+        setTempReviewers(m.reviewers || []);
       } catch (err) {
         console.error("Failed to load manuscript data:", err);
       }
@@ -1169,20 +1207,17 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     load();
   }, [manuscriptId]);
 
-  // NEW: final submission – assign editor and reviewers together
   const handleAssignAll = async () => {
     if (!tempEditorId || tempReviewers.length !== 3) return;
     setBtnLoading("assignAll");
 
     try {
-      // 1. Assign editor
       await fetch(`${API}?action=assignEditor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manuscript_id: manuscript!.id, editor_id: tempEditorId }),
       });
 
-      // 2. Assign reviewers
       const reviewerIds = tempReviewers
         .map(name => reviewers.find(r => r.name === name)?.id)
         .filter(Boolean) as number[];
@@ -1202,15 +1237,10 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  // NEW: handle reassign of a single expired reviewer
   const handleReassignReviewer = async (newReviewerId: number) => {
     if (!reassignTarget) return;
-    // This would call a new backend endpoint (replaceReviewer)
-    // For now, we just reassign and keep the old record (by not deleting it)
-    // We'll simulate by assigning the new reviewer and then refreshing.
     try {
       setBtnLoading("reassign");
-      // Call a hypothetical endpoint that marks the old review as 'expired' and creates a new pending one.
       await fetch(`${API}?action=replaceReviewer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1220,7 +1250,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           new_reviewer_id: newReviewerId,
         }),
       });
-      // Refresh data
       const res = await fetch(`${API}?action=show&id=${manuscriptId}`);
       const updated = await res.json();
       setManuscript(updated);
@@ -1251,20 +1280,16 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
 
   if (!manuscript) return null;
 
-  const reviewerProgress: ReviewerProgress[] =
-    manuscript.reviewerProgress ?? [];
-
+  const reviewerProgress: ReviewerProgress[] = manuscript.reviewerProgress ?? [];
   const normalizedStatus = manuscript.status?.toString().trim() || "";
   const isAccepted = normalizedStatus.toLowerCase() === "accepted";
   const isUnderReview = normalizedStatus.toLowerCase() === "under review";
   const isNewSubmission = normalizedStatus === "New Submissions";
 
   const handleToggleEditor = (editorId: number) => {
-    // Just update temp state, no API call yet
     setTempEditorId(prev => prev === editorId ? null : editorId);
   };
 
-  // Helper to get recommendation color
   const getRecommendationColor = (rec: string | null) => {
     switch (rec?.toLowerCase()) {
       case 'accept': return '#16a34a';
@@ -1331,13 +1356,11 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           ID: {formatManuscriptId(manuscript.id)} | Type: {manuscript.studyType} | Date: {manuscript.date}
         </p>
 
-        {/* Authors */}
         <div style={{ marginBottom: "16px" }}>
           <User size={20} style={{ marginRight: "6px", color: "#0d6efd" }} />
           <strong>Authors:</strong> {manuscript.authors}
         </div>
 
-        {/* Abstract */}
         {manuscript.abstract && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Abstract</strong>
@@ -1345,7 +1368,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Background */}
         {manuscript.background && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Background</strong>
@@ -1353,7 +1375,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Objective */}
         {manuscript.objective && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Objective</strong>
@@ -1361,7 +1382,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Conclusion */}
         {manuscript.conclusion && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Conclusion</strong>
@@ -1369,7 +1389,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* ACCEPTED MANUSCRIPT ACTIONS */}
         {isAccepted && (
           <div style={{ marginTop: "24px", padding: "20px", background: "#f0fdf4", borderRadius: "12px", border: "1px solid #bbf7d0" }}>
             <h3 style={{ marginBottom: "16px", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1438,7 +1457,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Editors - Toggle Assignment (temp) */}
         {isNewSubmission && (
           <div style={{ marginBottom: "16px", marginTop: "24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
@@ -1488,7 +1506,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Reviewers (temp selection) */}
         {isNewSubmission && (
           <div
             style={{
@@ -1528,7 +1545,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* Final Assign button (only when both editor and 3 reviewers selected) */}
         {isNewSubmission && tempEditorId && tempReviewers.length === 3 && (
           <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
             <button
@@ -1555,7 +1571,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {/* UNDER REVIEW – detailed reviewer feedback with numbers, countdown, reassign */}
         {isUnderReview && (
           <div style={{ marginTop: "24px" }}>
             <h3 style={{ marginBottom: "16px", color: "#111827", borderBottom: "2px solid #e5e7eb", paddingBottom: "8px" }}>
@@ -1582,7 +1597,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       background: "#ffffff",
                     }}
                   >
-                    {/* Header with number */}
                     <div
                       style={{
                         display: "flex",
@@ -1610,7 +1624,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                         <span style={{ fontWeight: 600, color: "#111827" }}>{progress.reviewer}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        {/* Status badge */}
                         <span
                           style={{
                             display: "inline-block",
@@ -1624,14 +1637,12 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                         >
                           {progress.status === 'reviewed' ? 'Completed' : expired ? 'Expired' : progress.status === 'reviewing' ? 'In Review' : 'Not Started'}
                         </span>
-                        {/* Countdown */}
                         {!expired && progress.status !== 'reviewed' && remaining && (
                           <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>⏳ {remaining}</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Reassign button if expired */}
                     {expired && progress.status !== 'reviewed' && (
                       <div style={{ marginBottom: "12px", display: "flex", justifyContent: "flex-end" }}>
                         <button
@@ -1658,10 +1669,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       </div>
                     )}
 
-                    {/* Scores / comments (unchanged) */}
                     {progress.status === "reviewed" && progress.scores && (
                       <div style={{ marginTop: "12px" }}>
-                        {/* Scores grid */}
                         <div
                           style={{
                             display: "grid",
@@ -1693,7 +1702,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                           })}
                         </div>
 
-                        {/* Recommendation badge */}
                         {progress.scores.recommendation && (
                           <div style={{ marginBottom: "12px" }}>
                             <span
@@ -1713,7 +1721,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                           </div>
                         )}
 
-                        {/* Comments to author */}
                         {progress.scores.commentsToAuthor && (
                           <div style={{ marginBottom: "12px" }}>
                             <div style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "4px", fontWeight: 600 }}>
@@ -1734,7 +1741,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                           </div>
                         )}
 
-                        {/* Confidential comments (only shown to editor) */}
                         {progress.scores.confidentialComments && (
                           <div>
                             <div style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "4px", fontWeight: 600 }}>
@@ -1757,7 +1763,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       </div>
                     )}
 
-                    {/* If reviewed but no scores (legacy) – show old comment field */}
                     {progress.status === "reviewed" && !progress.scores && progress.comment && (
                       <div style={{ marginTop: "12px" }}>
                         <div style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "4px", fontWeight: 600 }}>
@@ -1777,7 +1782,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       </div>
                     )}
 
-                    {/* Attachment */}
                     {progress.attachment && (
                       <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "6px", color: "#0d6efd" }}>
                         <Paperclip size={16} />
@@ -1791,7 +1795,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
               })
             )}
 
-            {/* EIC decision actions (unchanged) */}
             <div
               style={{
                 marginTop: "24px",
@@ -1899,7 +1902,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         )}
       </div>
 
-      {/* Reviewer Selection Modal (temp) */}
       {showReviewerModal && (
         <ReviewerSelectionModal
           reviewers={reviewers}
@@ -1912,7 +1914,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         />
       )}
 
-      {/* Single Reviewer Reassign Modal */}
       {reassignTarget && (
         <SingleReviewerModal
           reviewers={reviewers}
@@ -1939,7 +1940,6 @@ const ManuscriptCategoryView: FC = () => {
   const [reviewerTarget, setReviewerTarget] = useState<Manuscript | null>(null);
   const [allReviewers, setAllReviewers] = useState<Reviewer[]>([]);
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -1950,7 +1950,6 @@ const ManuscriptCategoryView: FC = () => {
         fetch(`${API}?action=list&status=${encodeURIComponent(readableStatus)}`).then((r) => r.json()),
         fetch(`${API}?action=reviewers`).then((r) => r.json()),
       ]);
-      // Ensure each manuscript has completedReviews (default 0 if missing)
       const manuscriptsWithCompleted = (data.data || []).map((m: any) => ({
         ...m,
         completedReviews: m.completedReviews ?? 0,
@@ -1968,17 +1967,15 @@ const ManuscriptCategoryView: FC = () => {
     loadList();
   }, [readableStatus]);
 
-  // Filter manuscripts based on the current category
   useEffect(() => {
     let filtered: Manuscript[] = [];
     if (readableStatus === "Under Review") {
       filtered = manuscripts.filter(
         (m) =>
-          !m.hasRevisions || // first round
+          !m.hasRevisions ||
           (m.hasRevisions &&
-            ((m.pendingReviews && m.pendingReviews > 0) || // ongoing review
-              (m.pendingReviews === 0 && m.completedReviews && m.completedReviews > 0)) // ready for decision
-          )
+            ((m.pendingReviews && m.pendingReviews > 0) ||
+              (m.pendingReviews === 0 && m.completedReviews && m.completedReviews > 0)))
       );
     } else if (readableStatus === "Revision Requested") {
       filtered = manuscripts.filter(
@@ -2150,7 +2147,6 @@ const ManuscriptCategoryView: FC = () => {
                           )}
                         </td>
                         <td style={{ padding: "12px 8px" }}>
-                          {/* MODIFIED: 2‑column grid with text labels */}
                           <div style={{
                             display: "grid",
                             gridTemplateColumns: "repeat(2, auto)",
@@ -2228,7 +2224,6 @@ const ManuscriptCategoryView: FC = () => {
           )}
         </div>
 
-        {/* Regular Manuscript Modal (for non-revision categories) */}
         {activeModalId && (
           <ManuscriptModal
             manuscriptId={activeModalId}
@@ -2237,7 +2232,6 @@ const ManuscriptCategoryView: FC = () => {
           />
         )}
 
-        {/* Revision History Modal (for Revision Requested and Revised categories) */}
         {revisionModalId && (
           <RevisionHistoryModal
             manuscriptId={revisionModalId}
@@ -2247,7 +2241,6 @@ const ManuscriptCategoryView: FC = () => {
           />
         )}
 
-        {/* Standalone Reviewer Selection Modal (for Revised category) */}
         {reviewerTarget && (
           <ReviewerSelectionModal
             reviewers={allReviewers}
