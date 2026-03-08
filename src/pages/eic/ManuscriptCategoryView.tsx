@@ -274,7 +274,7 @@ const Pagination: FC<PaginationProps> = ({
   );
 };
 
-/* ================= Reviewer Modal (with ordering) ================= */
+/* ================= Reviewer Modal (with pagination and ordering) ================= */
 interface ReviewerModalProps {
   reviewers: Reviewer[];
   currentReviewers: string[];      // initial selected reviewers (ordered)
@@ -289,7 +289,15 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
   onTempSave,
 }) => {
   const [selected, setSelected] = useState<string[]>([...currentReviewers]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12; // number of reviewers per page
+
   const maxReviewers = 3;
+  const totalPages = Math.ceil(reviewers.length / pageSize);
+  const paginatedReviewers = reviewers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const addReviewer = (name: string) => {
     if (selected.includes(name)) {
@@ -319,6 +327,14 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
   };
 
   const canSave = selected.length === maxReviewers;
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
 
   return (
     <div
@@ -352,7 +368,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
           </button>
         </div>
 
-        {/* Grid of all reviewers */}
+        {/* Grid of reviewers (paginated) */}
         <div
           style={{
             display: "grid",
@@ -361,7 +377,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
             marginTop: "16px",
           }}
         >
-          {reviewers.map((r) => {
+          {paginatedReviewers.map((r) => {
             const isSelected = selected.includes(r.name);
             const isDisabled = !isSelected && selected.length >= maxReviewers;
             return (
@@ -388,6 +404,43 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
             );
           })}
         </div>
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginTop: "16px" }}>
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              style={{
+                padding: "4px 8px",
+                borderRadius: "4px",
+                border: "1px solid #d1d5db",
+                background: currentPage === 1 ? "#f3f4f6" : "#fff",
+                color: currentPage === 1 ? "#9ca3af" : "#374151",
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ fontSize: "0.9rem", color: "#374151" }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: "4px 8px",
+                borderRadius: "4px",
+                border: "1px solid #d1d5db",
+                background: currentPage === totalPages ? "#f3f4f6" : "#fff",
+                color: currentPage === totalPages ? "#9ca3af" : "#374151",
+                cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
 
         {/* Ordered list of selected reviewers */}
         {selected.length > 0 && (
