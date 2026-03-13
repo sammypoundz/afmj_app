@@ -14,16 +14,20 @@ import {
   UserCheck,
   UserCog,
   Building2,
+  FileEdit,        // new icon for Revisions
+  FileCheck,       // new icon for Gallery Proof
 } from "lucide-react";
 
-// Define the expected shape of the API response
+// Updated DashboardData interface with revisions and gallery_proof
 interface DashboardData {
-  status: string; // "success" or other
+  status: string;
   kpi: {
     total_submissions: number;
     under_review: number;
+    revisions: number;          // new field
     accepted: number;
     rejected: number;
+    gallery_proof: number;       // new field
     published: number;
   };
   users: {
@@ -46,12 +50,10 @@ interface DashboardData {
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // Properly typed state
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  /* ================= FETCH API ================= */
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -76,14 +78,13 @@ const Dashboard = () => {
     fetchDashboard();
   }, []);
 
-  // Render loading/error states
   if (loading) return <div className="dashboard">Loading dashboard...</div>;
   if (error) return <div className="dashboard">{error}</div>;
   if (!data) return <div className="dashboard">No data received.</div>;
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
-  /* ================= KPI DATA FROM API ================= */
+  // KPI stats now include revisions and gallery_proof
   const stats = [
     {
       label: "Total Submissions",
@@ -97,11 +98,25 @@ const Dashboard = () => {
       icon: Clock,
       path: "/under-review",
     },
+    // New: Revisions card
+    {
+      label: "Revisions",
+      value: data.kpi.revisions,
+      icon: FileEdit,
+      path: "/manuscripts?status=revisions",
+    },
     {
       label: "Accepted",
       value: data.kpi.accepted,
       icon: CheckCircle,
       path: "/manuscripts?status=accepted",
+    },
+    // New: Gallery Proof card
+    {
+      label: "Gallery Proof",
+      value: data.kpi.gallery_proof,
+      icon: FileCheck,
+      path: "/manuscripts?status=gallery-proof",
     },
     {
       label: "Rejected",
@@ -117,7 +132,6 @@ const Dashboard = () => {
     },
   ];
 
-  /* ================= USER METRICS FROM API ================= */
   const userMetrics = [
     {
       label: "Authors",
@@ -147,9 +161,9 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      {/* ===== KPI SECTION ===== */}
+      {/* Manuscript Overview with new cards */}
       <section className="metrics-section">
-        <h2 className="section-title section-title-light">Overview</h2>
+        <h2 className="section-title section-title-light">Manuscript Overview</h2>
 
         <div className="kpi-modern-grid">
           {stats.map((stat) => {
@@ -179,7 +193,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* ===== USER METRICS ===== */}
+      {/* User Metrics (unchanged) */}
       <section className="metrics-section">
         <h2 className="section-title section-title-light">User Metrics</h2>
 
@@ -209,19 +223,16 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* ===== SECOND ROW ===== */}
+      {/* Second row (unchanged) */}
       <section className="dashboard-grid">
-        {/* Pending Actions */}
         <div className="panel">
           <h3>Pending Actions</h3>
-
           <ul className="action-list">
             <li onClick={() => navigate("/under-review")}>
               <AlertCircle size={16} className="danger" />
               <span>{data.pending.overdue_reviews} reviews overdue</span>
               <ArrowRight size={16} />
             </li>
-
             <li onClick={() => navigate("/manuscripts")}>
               <Clock size={16} className="warning" />
               <span>
@@ -229,7 +240,6 @@ const Dashboard = () => {
               </span>
               <ArrowRight size={16} />
             </li>
-
             <li onClick={() => navigate("/published")}>
               <CheckCircle size={16} className="success" />
               <span>
@@ -240,10 +250,8 @@ const Dashboard = () => {
           </ul>
         </div>
 
-        {/* Reviewer Performance */}
         <div className="panel">
           <h3>Reviewer Performance</h3>
-
           <div
             className="metric clickable"
             onClick={() => navigate("/reviewers/performance")}
@@ -255,7 +263,6 @@ const Dashboard = () => {
             </span>
             <ArrowRight size={16} />
           </div>
-
           <div
             className="metric clickable"
             onClick={() => navigate("/reviewers")}
