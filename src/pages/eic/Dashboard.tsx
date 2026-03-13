@@ -56,8 +56,9 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
+        // Added ?action=dashboard to match the new API endpoint
         const response = await axios.get(
-          "https://afmjonline.com/api/dashboard.php",
+          "https://afmjonline.com/api/dashboard.php?action=dashboard",
           {
             headers: {
               "Content-Type": "application/json",
@@ -82,7 +83,6 @@ const Dashboard = () => {
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
-  // KPI stats with corrected paths for status-based filtering
   const stats = [
     {
       label: "Total Submissions",
@@ -94,31 +94,31 @@ const Dashboard = () => {
       label: "Under Review",
       value: data.kpi.under_review,
       icon: Clock,
-      path: "/manuscripts/under-review",          // updated to use :status param
+      path: "/manuscripts/under-review",
     },
     {
       label: "Revisions",
       value: data.kpi.revisions,
       icon: FileEdit,
-      path: "/manuscripts/revisions",             // new card with correct path
+      path: "/manuscripts/revisions",
     },
     {
       label: "Accepted",
       value: data.kpi.accepted,
       icon: CheckCircle,
-      path: "/manuscripts/accepted",               // updated for consistency
+      path: "/manuscripts/accepted",
     },
     {
       label: "Gallery Proof",
       value: data.kpi.gallery_proof,
       icon: FileCheck,
-      path: "/manuscripts/gallery-proof",          // new card with correct path
+      path: "/manuscripts/gallery-proof",
     },
     {
       label: "Rejected",
       value: data.kpi.rejected,
       icon: XCircle,
-      path: "/manuscripts/rejected",               // updated for consistency
+      path: "/manuscripts/rejected",
     },
     {
       label: "Published",
