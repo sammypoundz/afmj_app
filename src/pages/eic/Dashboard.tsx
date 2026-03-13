@@ -14,20 +14,19 @@ import {
   UserCheck,
   UserCog,
   Building2,
-  FileEdit,        // new icon for Revisions
-  FileCheck,       // new icon for Gallery Proof
+  FileEdit,
+  FileCheck,
 } from "lucide-react";
 
-// Updated DashboardData interface with revisions and gallery_proof
 interface DashboardData {
   status: string;
   kpi: {
     total_submissions: number;
     under_review: number;
-    revisions: number;          // new field
+    revisions: number;
     accepted: number;
     rejected: number;
-    gallery_proof: number;       // new field
+    gallery_proof: number;
     published: number;
   };
   users: {
@@ -65,7 +64,6 @@ const Dashboard = () => {
             },
           }
         );
-
         setData(response.data);
       } catch (err) {
         console.error("API Error:", err);
@@ -84,7 +82,7 @@ const Dashboard = () => {
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
-  // KPI stats now include revisions and gallery_proof
+  // KPI stats with corrected paths for status-based filtering
   const stats = [
     {
       label: "Total Submissions",
@@ -96,33 +94,31 @@ const Dashboard = () => {
       label: "Under Review",
       value: data.kpi.under_review,
       icon: Clock,
-      path: "/under-review",
+      path: "/manuscripts/under-review",          // updated to use :status param
     },
-    // New: Revisions card
     {
       label: "Revisions",
       value: data.kpi.revisions,
       icon: FileEdit,
-      path: "/manuscripts?status=revisions",
+      path: "/manuscripts/revisions",             // new card with correct path
     },
     {
       label: "Accepted",
       value: data.kpi.accepted,
       icon: CheckCircle,
-      path: "/manuscripts?status=accepted",
+      path: "/manuscripts/accepted",               // updated for consistency
     },
-    // New: Gallery Proof card
     {
       label: "Gallery Proof",
       value: data.kpi.gallery_proof,
       icon: FileCheck,
-      path: "/manuscripts?status=gallery-proof",
+      path: "/manuscripts/gallery-proof",          // new card with correct path
     },
     {
       label: "Rejected",
       value: data.kpi.rejected,
       icon: XCircle,
-      path: "/manuscripts?status=rejected",
+      path: "/manuscripts/rejected",               // updated for consistency
     },
     {
       label: "Published",
@@ -161,14 +157,12 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      {/* Manuscript Overview with new cards */}
       <section className="metrics-section">
         <h2 className="section-title section-title-light">Manuscript Overview</h2>
 
         <div className="kpi-modern-grid">
           {stats.map((stat) => {
             const Icon = stat.icon;
-
             return (
               <div
                 key={stat.label}
@@ -178,12 +172,10 @@ const Dashboard = () => {
                 <div className="kpi-icon">
                   <Icon size={22} />
                 </div>
-
                 <div className="kpi-content">
                   <h2>{stat.value}</h2>
                   <p>{stat.label}</p>
                 </div>
-
                 <div className="kpi-trend">
                   <TrendingUp size={14} />
                 </div>
@@ -193,14 +185,11 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* User Metrics (unchanged) */}
       <section className="metrics-section">
         <h2 className="section-title section-title-light">User Metrics</h2>
-
         <div className="kpi-modern-grid">
           {userMetrics.map((user) => {
             const Icon = user.icon;
-
             return (
               <div
                 key={user.label}
@@ -210,12 +199,10 @@ const Dashboard = () => {
                 <div className="kpi-icon">
                   <Icon size={22} />
                 </div>
-
                 <div className="kpi-content">
                   <h2>{user.value}</h2>
                   <p>{user.label}</p>
                 </div>
-
                 <ArrowRight size={16} />
               </div>
             );
@@ -223,12 +210,11 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Second row (unchanged) */}
       <section className="dashboard-grid">
         <div className="panel">
           <h3>Pending Actions</h3>
           <ul className="action-list">
-            <li onClick={() => navigate("/under-review")}>
+            <li onClick={() => navigate("/manuscripts/under-review")}>
               <AlertCircle size={16} className="danger" />
               <span>{data.pending.overdue_reviews} reviews overdue</span>
               <ArrowRight size={16} />
