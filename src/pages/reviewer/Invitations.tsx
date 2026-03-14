@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, FileText, BookOpen, Target, CheckCircle, User } from "lucide-react";
+import { X, FileText, BookOpen, Target, CheckCircle, User, BarChart } from "lucide-react";
 
 // Global keyframes for spinner animation
 const GlobalStyles = () => (
@@ -27,6 +27,8 @@ interface ManuscriptPreview {
   abstract: string;
   background: string;
   objective: string;
+  methods?: string;        // new
+  results?: string;        // new
   conclusion: string;
   study_type: string;
   author_name: string;
@@ -262,6 +264,28 @@ const ReviewerInvitations = () => {
                           <span style={{ fontWeight: 600, color: "#7c3aed" }}>Objective</span>
                         </div>
                         <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.objective}</p>
+                      </div>
+                    )}
+
+                    {/* Methods - new section */}
+                    {previewData.methods && (
+                      <div style={{ borderLeft: "4px solid #f97316", paddingLeft: "16px", marginTop: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                          <FileText size={18} color="#f97316" />
+                          <span style={{ fontWeight: 600, color: "#f97316" }}>Methods</span>
+                        </div>
+                        <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.methods}</p>
+                      </div>
+                    )}
+
+                    {/* Results - new section */}
+                    {previewData.results && (
+                      <div style={{ borderLeft: "4px solid #a855f7", paddingLeft: "16px", marginTop: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                          <BarChart size={18} color="#a855f7" />
+                          <span style={{ fontWeight: 600, color: "#a855f7" }}>Results</span>
+                        </div>
+                        <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.results}</p>
                       </div>
                     )}
 

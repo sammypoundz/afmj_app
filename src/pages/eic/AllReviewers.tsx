@@ -3,7 +3,7 @@ import type { FC } from "react";
 import {
   Users, X, ShieldCheck, ShieldOff, Loader,
   Mail, Building2, Award, Calendar, ChevronLeft, ChevronRight,
-  UserPlus, ChevronsLeft, ChevronsRight
+  UserPlus, ChevronsLeft, ChevronsRight, Edit2, Save
 } from "lucide-react";
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
@@ -297,6 +297,31 @@ const styles = {
     gap: "8px",
     marginTop: "16px",
   },
+  editButton: {
+    background: "rgba(255,255,255,0.2)",
+    border: "none",
+    color: "#fff",
+    width: 42,
+    height: 42,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    transition: "background 0.2s",
+  },
+  textarea: {
+    padding: "10px 14px",
+    borderRadius: "10px",
+    border: `1px solid ${theme.border}`,
+    fontSize: "0.95rem",
+    outline: "none",
+    background: theme.grayBg,
+    width: "100%",
+    minHeight: "100px",
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+  },
 };
 
 // ================= Component =================
@@ -322,6 +347,15 @@ const AllReviewers: FC = () => {
   const [selectedManuscript, setSelectedManuscript] = useState("");
   const [manuscripts, setManuscripts] = useState<Manuscript[]>([]);
   const [loadingManuscripts, setLoadingManuscripts] = useState(false);
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    affiliation: "",
+    bio: "",
+    expertise: "",
+  });
 
   // Pagination for main list
   const [page, setPage] = useState(1);
@@ -454,7 +488,15 @@ const AllReviewers: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch details");
       setSelected(data);
-      setReviewsPage(1); // reset past reviews pagination
+      setReviewsPage(1);
+      // Initialize edit form with current values
+      setEditForm({
+        name: data.name,
+        affiliation: data.affiliation || "",
+        bio: data.bio || "",
+        expertise: data.expertise.join(", "),
+      });
+      setIsEditing(false); // ensure edit mode is off initially
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -508,6 +550,47 @@ const AllReviewers: FC = () => {
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
     }
+  };
+
+  // Save profile edits
+  const handleSaveProfile = async () => {
+    if (!selected) return;
+    const toastId = toast.loading("Saving changes...");
+    try {
+      const payload = {
+        id: selected.id,
+        name: editForm.name,
+        affiliation: editForm.affiliation,
+        bio: editForm.bio,
+        expertise: editForm.expertise.split(",").map(s => s.trim()).filter(Boolean),
+      };
+      const res = await fetch(`${API_BASE}?action=updateReviewerProfile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      toast.success("Profile updated", { id: toastId });
+      // Refresh reviewer details
+      await fetchReviewerDetails(selected.id);
+      // Also refresh the main list to reflect changes
+      fetchReviewers();
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (selected) {
+      setEditForm({
+        name: selected.name,
+        affiliation: selected.affiliation || "",
+        bio: selected.bio || "",
+        expertise: selected.expertise.join(", "),
+      });
+    }
+    setIsEditing(false);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -766,9 +849,20 @@ const AllReviewers: FC = () => {
                   <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.9 }}>{selected.email}</p>
                 </div>
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
-                <X size={20} />
-              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {!isEditing && (
+                  <button
+                    style={styles.editButton}
+                    onClick={() => setIsEditing(true)}
+                    title="Edit profile"
+                  >
+                    <Edit2 size={20} />
+                  </button>
+                )}
+                <button onClick={() => setSelected(null)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             <div style={{ padding: "16px 24px", borderBottom: `1px solid ${theme.border}`, display: "flex", gap: "12px" }}>
@@ -789,49 +883,93 @@ const AllReviewers: FC = () => {
             <div style={styles.modalBody}>
               {profileTab === "profile" ? (
                 <>
-                  <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
-                    <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
-                      <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Affiliation</div>
-                      <div style={{ fontWeight: 500, marginTop: 4 }}>{selected.affiliation || "—"}</div>
-                    </div>
-                    <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
-                      <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Status</div>
-                      <div style={{ marginTop: 4 }}>
-                        <span style={styles.statusBadge(selected.status === "active", selected.suspended)}>
-                          {selected.suspended ? "Suspended" : selected.status}
-                        </span>
+                  {!isEditing ? (
+                    // View mode
+                    <>
+                      <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
+                        <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
+                          <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Affiliation</div>
+                          <div style={{ fontWeight: 500, marginTop: 4 }}>{selected.affiliation || "—"}</div>
+                        </div>
+                        <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
+                          <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Status</div>
+                          <div style={{ marginTop: 4 }}>
+                            <span style={styles.statusBadge(selected.status === "active", selected.suspended)}>
+                              {selected.suspended ? "Suspended" : selected.status}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
-                    <div style={styles.statItem}>
-                      <div style={styles.statValue}>{selected.activeAssignments}</div>
-                      <div style={styles.statLabel}>Active Assignments</div>
-                    </div>
-                    <div style={styles.statItem}>
-                      <div style={styles.statValue}>{selected.completedReviews}</div>
-                      <div style={styles.statLabel}>Completed Reviews</div>
-                    </div>
-                  </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
+                        <div style={styles.statItem}>
+                          <div style={styles.statValue}>{selected.activeAssignments}</div>
+                          <div style={styles.statLabel}>Active Assignments</div>
+                        </div>
+                        <div style={styles.statItem}>
+                          <div style={styles.statValue}>{selected.completedReviews}</div>
+                          <div style={styles.statLabel}>Completed Reviews</div>
+                        </div>
+                      </div>
 
-                  <div style={{ marginBottom: "20px" }}>
-                    <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Expertise</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                      {selected.expertise.map((ex) => (
-                        <span key={ex} style={styles.expertiseTag}>{ex}</span>
-                      ))}
-                    </div>
-                  </div>
+                      <div style={{ marginBottom: "20px" }}>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Expertise</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                          {selected.expertise.map((ex) => (
+                            <span key={ex} style={styles.expertiseTag}>{ex}</span>
+                          ))}
+                        </div>
+                      </div>
 
-                  <div>
-                    <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Biography</div>
-                    <div style={{ background: theme.grayBg, borderRadius: "12px", padding: "16px", lineHeight: 1.6 }}>
-                      {selected.bio || "No biography provided."}
-                    </div>
-                  </div>
+                      <div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Biography</div>
+                        <div style={{ background: theme.grayBg, borderRadius: "12px", padding: "16px", lineHeight: 1.6 }}>
+                          {selected.bio || "No biography provided."}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    // Edit mode
+                    <>
+                      <div style={{ marginBottom: "20px" }}>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Full name</label>
+                        <input
+                          style={styles.input}
+                          value={editForm.name}
+                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        />
+                      </div>
+                      <div style={{ marginBottom: "20px" }}>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Affiliation</label>
+                        <input
+                          style={styles.input}
+                          value={editForm.affiliation}
+                          onChange={(e) => setEditForm({ ...editForm, affiliation: e.target.value })}
+                        />
+                      </div>
+                      <div style={{ marginBottom: "20px" }}>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Expertise (comma separated)</label>
+                        <input
+                          style={styles.input}
+                          value={editForm.expertise}
+                          onChange={(e) => setEditForm({ ...editForm, expertise: e.target.value })}
+                          placeholder="e.g. Cardiology, Epidemiology, Statistics"
+                        />
+                      </div>
+                      <div style={{ marginBottom: "20px" }}>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Biography</label>
+                        <textarea
+                          style={styles.textarea}
+                          value={editForm.bio}
+                          onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                          rows={5}
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
+                // Past Reviews tab (unchanged)
                 <>
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {paginatedReviews.length > 0 ? (
@@ -876,14 +1014,25 @@ const AllReviewers: FC = () => {
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.buttonSecondary} onClick={() => setSelected(null)}>Close</button>
-              <button style={styles.buttonPrimary} onClick={() => openAssignModal(selected)}>Assign Manuscript</button>
-              <button
-                style={selected.suspended ? styles.buttonPrimary : styles.buttonDanger}
-                onClick={() => suspendReviewer(selected.id, selected.suspended)}
-              >
-                {selected.suspended ? "Remove Suspension" : "Suspend"}
-              </button>
+              {isEditing ? (
+                <>
+                  <button style={styles.buttonSecondary} onClick={handleCancelEdit}>Cancel</button>
+                  <button style={styles.buttonPrimary} onClick={handleSaveProfile}>
+                    <Save size={16} /> Save Changes
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button style={styles.buttonSecondary} onClick={() => setSelected(null)}>Close</button>
+                  <button style={styles.buttonPrimary} onClick={() => openAssignModal(selected)}>Assign Manuscript</button>
+                  <button
+                    style={selected.suspended ? styles.buttonPrimary : styles.buttonDanger}
+                    onClick={() => suspendReviewer(selected.id, selected.suspended)}
+                  >
+                    {selected.suspended ? "Remove Suspension" : "Suspend"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

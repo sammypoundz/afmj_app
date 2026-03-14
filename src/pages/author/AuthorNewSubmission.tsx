@@ -6,7 +6,6 @@ import {
   X,
   FileText,
   CheckCircle,
-  // Circle,
   ChevronRight,
   ChevronLeft,
 } from "lucide-react";
@@ -14,9 +13,14 @@ import toast, { Toaster } from "react-hot-toast";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
+// Helper to convert string to title case (capitalize first letter of each word)
+const toTitleCase = (str: string): string => {
+  return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+};
+
 const styles = {
   page: {
-    maxWidth: "800px",
+    maxWidth: "900px",
     margin: "0 auto",
     padding: "24px 16px",
   },
@@ -207,6 +211,29 @@ const styles = {
     opacity: 0.6,
     cursor: "not-allowed",
   },
+  previewSection: {
+    marginTop: 16,
+    padding: 16,
+    background: "#f8fafc",
+    borderRadius: "8px",
+  },
+  previewTitle: {
+    fontSize: "1.1rem",
+    fontWeight: 600,
+    marginBottom: 12,
+    color: "#0f172a",
+  },
+  previewItem: {
+    marginBottom: 8,
+  },
+  previewLabel: {
+    fontWeight: 500,
+    color: "#475569",
+    marginRight: 8,
+  },
+  previewValue: {
+    color: "#0f172a",
+  },
 };
 
 const steps = [
@@ -225,6 +252,8 @@ const AuthorNewSubmission = () => {
     study_type: "Health Informatics",
     background: "",
     objective: "",
+    methods: "",          // new
+    results: "",          // new
     conclusion: "",
     co_authors: "",
   });
@@ -237,6 +266,13 @@ const AuthorNewSubmission = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Convert title to title case when user leaves the field
+  const handleTitleBlur = () => {
+    if (formData.title.trim()) {
+      setFormData({ ...formData, title: toTitleCase(formData.title) });
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "manuscript" | "cover") => {
@@ -270,6 +306,7 @@ const AuthorNewSubmission = () => {
         toast.error("Abstract is required");
         return;
       }
+      // Methods and results are optional
     }
     if (currentStep === 2) {
       if (!manuscriptFile) {
@@ -311,6 +348,8 @@ const AuthorNewSubmission = () => {
     data.append("study_type", formData.study_type);
     data.append("background", formData.background);
     data.append("objective", formData.objective);
+    data.append("methods", formData.methods);      // new
+    data.append("results", formData.results);      // new
     data.append("conclusion", formData.conclusion);
     data.append("co_authors", formData.co_authors);
     data.append("manuscript_file", manuscriptFile);
@@ -350,6 +389,7 @@ const AuthorNewSubmission = () => {
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
+                onBlur={handleTitleBlur}
                 placeholder="Enter manuscript title"
                 style={styles.input}
                 disabled={loading}
@@ -406,6 +446,30 @@ const AuthorNewSubmission = () => {
                   value={formData.objective}
                   onChange={handleInputChange}
                   placeholder="Objective"
+                  style={styles.textarea}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div style={styles.row}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Methods (optional)</label>
+                <textarea
+                  name="methods"
+                  value={formData.methods}
+                  onChange={handleInputChange}
+                  placeholder="Methods"
+                  style={styles.textarea}
+                  disabled={loading}
+                />
+              </div>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Results (optional)</label>
+                <textarea
+                  name="results"
+                  value={formData.results}
+                  onChange={handleInputChange}
+                  placeholder="Results"
                   style={styles.textarea}
                   disabled={loading}
                 />
@@ -512,13 +576,56 @@ const AuthorNewSubmission = () => {
                 disabled={loading}
               />
             </div>
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ fontWeight: 600, marginBottom: 8 }}>Review Your Submission</h4>
-              <p><strong>Title:</strong> {formData.title}</p>
-              <p><strong>Section:</strong> {formData.study_type}</p>
-              <p><strong>Abstract:</strong> {formData.abstract.substring(0, 100)}...</p>
-              <p><strong>Manuscript:</strong> {manuscriptFile?.name}</p>
-              {coverLetter && <p><strong>Cover letter:</strong> {coverLetter.name}</p>}
+            <div style={styles.previewSection}>
+              <h4 style={styles.previewTitle}>Review Your Submission</h4>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Title:</span>
+                <span style={styles.previewValue}>{formData.title}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Section:</span>
+                <span style={styles.previewValue}>{formData.study_type}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Abstract:</span>
+                <span style={styles.previewValue}>{formData.abstract.substring(0, 150)}...</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Background:</span>
+                <span style={styles.previewValue}>{formData.background || "—"}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Objective:</span>
+                <span style={styles.previewValue}>{formData.objective || "—"}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Methods:</span>
+                <span style={styles.previewValue}>{formData.methods || "—"}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Results:</span>
+                <span style={styles.previewValue}>{formData.results || "—"}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Conclusion:</span>
+                <span style={styles.previewValue}>{formData.conclusion || "—"}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Manuscript:</span>
+                <span style={styles.previewValue}>{manuscriptFile?.name}</span>
+              </div>
+              {coverLetter && (
+                <div style={styles.previewItem}>
+                  <span style={styles.previewLabel}>Cover letter:</span>
+                  <span style={styles.previewValue}>{coverLetter.name}</span>
+                </div>
+              )}
+              {formData.co_authors && (
+                <div style={styles.previewItem}>
+                  <span style={styles.previewLabel}>Co-authors:</span>
+                  <span style={styles.previewValue}>{formData.co_authors}</span>
+                </div>
+              )}
             </div>
           </>
         );

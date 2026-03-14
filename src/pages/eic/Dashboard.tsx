@@ -56,7 +56,6 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        // Added ?action=dashboard to match the new API endpoint
         const response = await axios.get(
           "https://afmjonline.com/api/dashboard.php?action=dashboard",
           {
@@ -65,6 +64,7 @@ const Dashboard = () => {
             },
           }
         );
+        console.log("API Response:", response.data); // Debug: check if revisions and gallery_proof are present
         setData(response.data);
       } catch (err) {
         console.error("API Error:", err);
@@ -83,46 +83,47 @@ const Dashboard = () => {
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
+  // Safely access values with fallback to 0 in case API doesn't return them (though it should)
   const stats = [
     {
       label: "Total Submissions",
-      value: data.kpi.total_submissions,
+      value: data.kpi.total_submissions ?? 0,
       icon: FileText,
       path: "/manuscripts",
     },
     {
       label: "Under Review",
-      value: data.kpi.under_review,
+      value: data.kpi.under_review ?? 0,
       icon: Clock,
       path: "/manuscripts/under-review",
     },
     {
       label: "Revisions",
-      value: data.kpi.revisions,
+      value: data.kpi.revisions ?? 0,
       icon: FileEdit,
       path: "/manuscripts/revisions",
     },
     {
       label: "Accepted",
-      value: data.kpi.accepted,
+      value: data.kpi.accepted ?? 0,
       icon: CheckCircle,
       path: "/manuscripts/accepted",
     },
     {
       label: "Gallery Proof",
-      value: data.kpi.gallery_proof,
+      value: data.kpi.gallery_proof ?? 0,
       icon: FileCheck,
       path: "/manuscripts/gallery-proof",
     },
     {
       label: "Rejected",
-      value: data.kpi.rejected,
+      value: data.kpi.rejected ?? 0,
       icon: XCircle,
       path: "/manuscripts/rejected",
     },
     {
       label: "Published",
-      value: data.kpi.published,
+      value: data.kpi.published ?? 0,
       icon: UploadCloud,
       path: "/published",
     },
@@ -131,25 +132,25 @@ const Dashboard = () => {
   const userMetrics = [
     {
       label: "Authors",
-      value: data.users.authors,
+      value: data.users.authors ?? 0,
       icon: Users,
       path: "/users/authors",
     },
     {
       label: "Reviewers",
-      value: data.users.reviewers,
+      value: data.users.reviewers ?? 0,
       icon: UserCheck,
       path: "/users/reviewers",
     },
     {
       label: "Editors",
-      value: data.users.editors,
+      value: data.users.editors ?? 0,
       icon: UserCog,
       path: "/users/editors",
     },
     {
       label: "Publishers",
-      value: data.users.publishers,
+      value: data.users.publishers ?? 0,
       icon: Building2,
       path: "/users/publishers",
     },

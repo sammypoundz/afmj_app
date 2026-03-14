@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, BookOpen, Target, CheckCircle, User, X, Calendar, Clock, Download } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  BookOpen,
+  Target,
+  CheckCircle,
+  User,
+  X,
+  Calendar,
+  Clock,
+  Download,
+  BarChart,      // for Results
+  FlaskConical,  // for Methods (optional, if you prefer a scientific icon)
+} from "lucide-react";
 
 const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
 
@@ -18,6 +31,8 @@ interface ManuscriptPreview {
   abstract: string;
   background: string;
   objective: string;
+  methods?: string;      // new
+  results?: string;      // new
   conclusion: string;
   study_type: string;
   author_name: string;
@@ -228,7 +243,7 @@ const ReviewerActiveReviews = () => {
 
                 <button
                   onClick={() => openPreview(review)}
-                  className="responsive-margin-top"  // ← added class for responsive margin
+                  className="responsive-margin-top"
                   style={{
                     background: "#16a34a",
                     color: "#fff",
@@ -243,7 +258,6 @@ const ReviewerActiveReviews = () => {
                     gap: "8px",
                     transition: "background 0.2s",
                     boxShadow: "0 4px 8px rgba(22,163,74,0.2)",
-                    // marginTop removed from inline styles
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#0d9488")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "#16a34a")}
@@ -417,6 +431,28 @@ const ReviewerActiveReviews = () => {
                         <span style={{ fontWeight: 600, color: "#7c3aed" }}>Objective</span>
                       </div>
                       <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.objective}</p>
+                    </div>
+                  )}
+
+                  {/* Methods */}
+                  {previewData.methods && (
+                    <div style={{ borderLeft: "4px solid #f97316", paddingLeft: "16px", marginTop: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <FlaskConical size={18} color="#f97316" />
+                        <span style={{ fontWeight: 600, color: "#f97316" }}>Methods</span>
+                      </div>
+                      <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.methods}</p>
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {previewData.results && (
+                    <div style={{ borderLeft: "4px solid #a855f7", paddingLeft: "16px", marginTop: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <BarChart size={18} color="#a855f7" />
+                        <span style={{ fontWeight: 600, color: "#a855f7" }}>Results</span>
+                      </div>
+                      <p style={{ color: "#374151", lineHeight: 1.6, margin: 0 }}>{previewData.results}</p>
                     </div>
                   )}
 

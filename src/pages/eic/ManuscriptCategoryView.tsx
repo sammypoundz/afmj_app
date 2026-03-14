@@ -83,8 +83,10 @@ interface Manuscript {
   date: string;
   abstract?: string | null;
   background?: string | null;
-  conclusion?: string | null;
   objective?: string | null;
+  methods?: string | null;          // new
+  results?: string | null;          // new
+  conclusion?: string | null;
   reviewers?: string[];
   editors?: string[];
   reviewerProgress?: ReviewerProgress[];
@@ -1432,6 +1434,20 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           <div style={{ marginBottom: "16px" }}>
             <strong>Objective</strong>
             <p style={{ marginTop: "6px", color: "#374151", lineHeight: 1.6 }}>{manuscript.objective}</p>
+          </div>
+        )}
+
+        {manuscript.methods && (   // new section
+          <div style={{ marginBottom: "16px" }}>
+            <strong>Methods</strong>
+            <p style={{ marginTop: "6px", color: "#374151", lineHeight: 1.6 }}>{manuscript.methods}</p>
+          </div>
+        )}
+
+        {manuscript.results && (   // new section
+          <div style={{ marginBottom: "16px" }}>
+            <strong>Results</strong>
+            <p style={{ marginTop: "6px", color: "#374151", lineHeight: 1.6 }}>{manuscript.results}</p>
           </div>
         )}
 
