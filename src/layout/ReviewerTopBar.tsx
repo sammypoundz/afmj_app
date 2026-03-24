@@ -1,14 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, LogOut, ChevronDown } from "lucide-react";
-
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
-
-interface UserInfo {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-}
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 // Styles object for consistency
 const styles = {
@@ -37,6 +30,9 @@ const styles = {
   },
   right: {
     position: "relative" as const,
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
   },
   userMenu: {
     display: "flex",
@@ -86,32 +82,28 @@ const styles = {
     color: "#1e293b",
     transition: "background 0.2s",
   },
-  dropdownItemHover: {
-    background: "#f1f5f9",
-  },
   icon: {
     color: "#64748b",
+  },
+  logoutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    padding: "6px 12px",
+    borderRadius: "6px",
+    color: "#6b7280",
+    transition: "all 0.2s",
   },
 };
 
 const ReviewerTopBar = () => {
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${API_BASE}?action=getCurrentUser`);
-        if (!res.ok) throw new Error("Failed to fetch user");
-        const data = await res.json();
-        setUser(data);
-      } catch (err) {
-        console.error("Error fetching user:", err);
-      }
-    };
-    fetchUser();
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -123,15 +115,18 @@ const ReviewerTopBar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    // Clear session/token and redirect to login
-    // localStorage.removeItem("token");
-    window.location.href = "/login";
+  const handleProfile = () => {
+    navigate("/reviewer/profile");
+    setDropdownOpen(false);
   };
 
-  const handleProfile = () => {
-    window.location.href = "/reviewer/profile";
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
   };
+
+  // If user is not loaded yet, show placeholder
+  const displayName = user?.name || user?.email || "Reviewer";
 
   return (
     <header style={styles.topbar}>
@@ -139,45 +134,51 @@ const ReviewerTopBar = () => {
         <h3 style={styles.title}>Reviewer Workspace</h3>
       </div>
 
-      <div style={styles.right} ref={dropdownRef}>
-        <div
-          style={styles.userMenu}
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
-        >
-          <span style={styles.userName}>{user?.name || "Loading..."}</span>
-          <ChevronDown
-            size={16}
-            style={{
-              ...styles.chevron,
-              ...(dropdownOpen ? styles.chevronOpen : {}),
-            }}
-          />
+      <div style={styles.right}>
+        {/* User menu with dropdown for profile */}
+        <div style={styles.right} ref={dropdownRef}>
+          <div
+            style={styles.userMenu}
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+          >
+            <span style={styles.userName}>{displayName}</span>
+            <ChevronDown
+              size={16}
+              style={{
+                ...styles.chevron,
+                ...(dropdownOpen ? styles.chevronOpen : {}),
+              }}
+            />
+          </div>
+
+          {dropdownOpen && (
+            <div style={styles.dropdown}>
+              <button
+                style={styles.dropdownItem}
+                onClick={handleProfile}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              >
+                <User size={16} style={styles.icon} />
+                <span>Profile</span>
+              </button>
+              {/* Removed logout from dropdown – now separate button */}
+            </div>
+          )}
         </div>
 
-        {dropdownOpen && (
-          <div style={styles.dropdown}>
-            <button
-              style={styles.dropdownItem}
-              onClick={handleProfile}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              <User size={16} style={styles.icon} />
-              <span>Profile</span>
-            </button>
-            <button
-              style={styles.dropdownItem}
-              onClick={handleLogout}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              <LogOut size={16} style={styles.icon} />
-              <span>Logout</span>
-            </button>
-          </div>
-        )}
+        {/* Separate logout button */}
+        <button
+          style={styles.logoutBtn}
+          onClick={handleLogout}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <LogOut size={18} />
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   );

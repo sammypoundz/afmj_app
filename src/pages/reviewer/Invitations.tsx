@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, FileText, BookOpen, Target, CheckCircle, User, BarChart } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
 // Global keyframes for spinner animation
 const GlobalStyles = () => (
@@ -11,7 +12,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 interface Invitation {
   id: number;
@@ -27,8 +28,8 @@ interface ManuscriptPreview {
   abstract: string;
   background: string;
   objective: string;
-  methods?: string;        // new
-  results?: string;        // new
+  methods?: string;
+  results?: string;
   conclusion: string;
   study_type: string;
   author_name: string;
@@ -42,17 +43,28 @@ const ReviewerInvitations = () => {
   const [previewData, setPreviewData] = useState<ManuscriptPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<"accept" | "decline" | null>(null);
+  const { authFetch, sessionId } = useAuth();
 
   const fetchInvitations = async () => {
+    if (!sessionId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?action=listInvitations`);
-      const data = await res.json();
-      if (res.ok) {
-        setInvitations(data);
-      } else {
+      const res = await authFetch(`${API_BASE}?action=listInvitations`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Session expired – optionally trigger logout
+          console.warn("Session expired, redirect to login");
+        }
+        const data = await res.json();
         console.error("Failed to fetch invitations:", data.error);
+        return;
       }
+      const data = await res.json();
+      setInvitations(data);
     } catch (err) {
       console.error("Network error:", err);
     } finally {
@@ -61,25 +73,34 @@ const ReviewerInvitations = () => {
   };
 
   useEffect(() => {
-    fetchInvitations();
-  }, []);
+    if (sessionId) {
+      fetchInvitations();
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // refetch when session changes
 
   const openPreview = async (inv: Invitation) => {
+    if (!sessionId) return;
     setSelectedInvitation(inv);
     setModalOpen(true);
     setPreviewLoading(true);
     setPreviewData(null);
     try {
-      const res = await fetch(`${API_BASE}?action=getManuscriptPreview&review_id=${inv.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setPreviewData(data);
-      } else {
-        alert(data.error || "Failed to load manuscript details");
-        setModalOpen(false);
+      const res = await authFetch(`${API_BASE}?action=getManuscriptPreview&review_id=${inv.id}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Redirect or show error
+          throw new Error("Session expired");
+        }
+        const data = await res.json();
+        throw new Error(data.error || "Failed to load manuscript details");
       }
-    } catch (err) {
-      alert("Network error");
+      const data = await res.json();
+      setPreviewData(data);
+    } catch (err: any) {
+      alert(err.message);
       setModalOpen(false);
     } finally {
       setPreviewLoading(false);
@@ -94,24 +115,24 @@ const ReviewerInvitations = () => {
   };
 
   const handleDecision = async (action: "accept" | "decline") => {
-    if (!selectedInvitation) return;
+    if (!selectedInvitation || !sessionId) return;
     setPendingAction(action);
     try {
-      const res = await fetch(`${API_BASE}?action=${action}Invitation`, {
+      const res = await authFetch(`${API_BASE}?action=${action}Invitation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ review_id: selectedInvitation.id }),
       });
       const data = await res.json();
       if (res.ok) {
-        await fetchInvitations();
+        await fetchInvitations(); // refresh list
         closeModal();
       } else {
-        alert(data.error || "Action failed");
-        setPendingAction(null);
+        alert(data.error || `${action} failed`);
       }
     } catch (err) {
       alert("Network error");
+    } finally {
       setPendingAction(null);
     }
   };
@@ -151,7 +172,7 @@ const ReviewerInvitations = () => {
           )}
         </div>
 
-        {/* Modern Preview Modal */}
+        {/* Modern Preview Modal (same as before) */}
         {modalOpen && selectedInvitation && (
           <div
             style={{
@@ -267,7 +288,7 @@ const ReviewerInvitations = () => {
                       </div>
                     )}
 
-                    {/* Methods - new section */}
+                    {/* Methods */}
                     {previewData.methods && (
                       <div style={{ borderLeft: "4px solid #f97316", paddingLeft: "16px", marginTop: "8px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -278,7 +299,7 @@ const ReviewerInvitations = () => {
                       </div>
                     )}
 
-                    {/* Results - new section */}
+                    {/* Results */}
                     {previewData.results && (
                       <div style={{ borderLeft: "4px solid #a855f7", paddingLeft: "16px", marginTop: "8px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>

@@ -14,6 +14,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -285,6 +286,7 @@ const entryStatusBadge = (addressed: boolean) => ({
 
 const AuthorRevisions = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [revisions, setRevisions] = useState<ManuscriptRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -296,19 +298,33 @@ const AuthorRevisions = () => {
   const [submitting, setSubmitting] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
-    fetchRevisions();
-  }, []);
+    if (sessionId) {
+      fetchRevisions();
+    } else {
+      setLoading(false);
+      setError("No active session. Please log in again.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   const fetchRevisions = async () => {
+    if (!sessionId) return;
+
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?action=getRevisions`);
+      const res = await authFetch(`${API_BASE}?action=getRevisions`);
+      if (res.status === 401) {
+        setError("Session expired. Please log in again.");
+        setTimeout(() => navigate("/login"), 2000);
+        return;
+      }
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to fetch revisions");
       }
       const data = await res.json();
       setRevisions(data);
+      setError(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -360,6 +376,11 @@ const AuthorRevisions = () => {
       toast.error("Please enter your response to the reviewer");
       return;
     }
+    if (!sessionId) {
+      toast.error("Session expired. Please log in again.");
+      navigate("/login");
+      return;
+    }
 
     setSubmitting((prev) => ({ ...prev, [manuscriptId]: true }));
     const toastId = toast.loading("Submitting revision...");
@@ -373,10 +394,15 @@ const AuthorRevisions = () => {
     }
 
     try {
-      const res = await fetch(`${API_BASE}?action=submitRevision`, {
+      const res = await authFetch(`${API_BASE}?action=submitRevision`, {
         method: "POST",
         body: formData,
       });
+      if (res.status === 401) {
+        toast.error("Session expired. Please log in again.", { id: toastId });
+        navigate("/login");
+        return;
+      }
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Submission failed");
 

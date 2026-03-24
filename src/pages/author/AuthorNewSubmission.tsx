@@ -10,10 +10,11 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
-// Helper to convert string to title case (capitalize first letter of each word)
+// Helper to convert string to title case
 const toTitleCase = (str: string): string => {
   return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 };
@@ -245,6 +246,7 @@ const steps = [
 
 const AuthorNewSubmission = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     title: "",
@@ -252,8 +254,8 @@ const AuthorNewSubmission = () => {
     study_type: "Health Informatics",
     background: "",
     objective: "",
-    methods: "",          // new
-    results: "",          // new
+    methods: "",
+    results: "",
     conclusion: "",
     co_authors: "",
   });
@@ -268,7 +270,6 @@ const AuthorNewSubmission = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Convert title to title case when user leaves the field
   const handleTitleBlur = () => {
     if (formData.title.trim()) {
       setFormData({ ...formData, title: toTitleCase(formData.title) });
@@ -294,7 +295,6 @@ const AuthorNewSubmission = () => {
   };
 
   const goToNextStep = () => {
-    // Validate current step before proceeding
     if (currentStep === 0) {
       if (!formData.title.trim()) {
         toast.error("Title is required");
@@ -306,7 +306,6 @@ const AuthorNewSubmission = () => {
         toast.error("Abstract is required");
         return;
       }
-      // Methods and results are optional
     }
     if (currentStep === 2) {
       if (!manuscriptFile) {
@@ -338,6 +337,11 @@ const AuthorNewSubmission = () => {
       setCurrentStep(2);
       return;
     }
+    if (!sessionId) {
+      toast.error("Session expired. Please log in again.");
+      navigate("/login");
+      return;
+    }
 
     setLoading(true);
     const toastId = toast.loading("Submitting manuscript...");
@@ -348,18 +352,24 @@ const AuthorNewSubmission = () => {
     data.append("study_type", formData.study_type);
     data.append("background", formData.background);
     data.append("objective", formData.objective);
-    data.append("methods", formData.methods);      // new
-    data.append("results", formData.results);      // new
+    data.append("methods", formData.methods);
+    data.append("results", formData.results);
     data.append("conclusion", formData.conclusion);
     data.append("co_authors", formData.co_authors);
     data.append("manuscript_file", manuscriptFile);
     if (coverLetter) data.append("cover_letter", coverLetter);
 
     try {
-      const res = await fetch(`${API_BASE}?action=submitManuscript`, {
+      const res = await authFetch(`${API_BASE}?action=submitManuscript`, {
         method: "POST",
         body: data,
       });
+
+      if (res.status === 401) {
+        toast.error("Session expired. Please log in again.", { id: toastId });
+        navigate("/login");
+        return;
+      }
 
       const result = await res.json();
 
@@ -371,6 +381,7 @@ const AuthorNewSubmission = () => {
       setTimeout(() => navigate("/author/submissions"), 1500);
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
+    } finally {
       setLoading(false);
     }
   };

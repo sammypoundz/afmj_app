@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext"; // adjust path if needed
 import { reviewerMenu } from "./reviewerMenu";
 
 // Define the shape of data returned by getDashboardStats
@@ -12,20 +13,33 @@ interface DashboardStats {
   overdue: number;
 }
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 const ReviewerSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
 
   // Fetch dashboard statistics on component mount
   useEffect(() => {
+    // Only fetch if we have a session ID (should always be true on authenticated pages)
+    if (!sessionId) {
+      return;
+    }
+
     const fetchStats = async () => {
       try {
-        const response = await fetch(`${API_BASE}?action=getDashboardStats`);
-        if (!response.ok) throw new Error("Failed to fetch stats");
+        const response = await authFetch(`${API_BASE}?action=getDashboardStats`);
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Unauthorized – redirect to login (or trigger logout)
+            navigate("/login");
+            return;
+          }
+          throw new Error("Failed to fetch stats");
+        }
         const data: DashboardStats = await response.json();
         setStats(data);
       } catch (err) {
@@ -35,7 +49,7 @@ const ReviewerSidebar = () => {
     };
 
     fetchStats();
-  }, []);
+  }, [authFetch, sessionId, navigate]); // dependencies ensure we refetch if session changes
 
   // Map menu labels to routes
   const getPath = (label: string) => {

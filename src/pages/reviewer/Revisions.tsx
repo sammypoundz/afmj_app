@@ -1,8 +1,9 @@
 import { type FC, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, FileText, CheckCircle, RotateCcw, AlertTriangle } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API = "https://afmjonline.com/api/reviewerApi.php"; // adjust if needed
+const API = "/api/reviewerApi.php";
 
 interface RevisionItem {
   entryId: number;
@@ -35,6 +36,8 @@ const globalStyle = `
 
 const ReviewerRevisions: FC = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
+
   const [revisions, setRevisions] = useState<RevisionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,24 +47,41 @@ const ReviewerRevisions: FC = () => {
   const [concernSubmitting, setConcernSubmitting] = useState(false);
 
   const fetchRevisions = async () => {
+    if (!sessionId) {
+      setLoading(false);
+      setError("No active session. Please log in again.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}?action=listRevisions`);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const res = await authFetch(`${API}?action=listRevisions`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Session expired. Please log in again.");
+        }
+        throw new Error(`HTTP error ${res.status}`);
+      }
       const data = await res.json();
       setRevisions(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load revisions:", err);
-      setError("Could not load revisions. Please try again.");
+      setError(err.message || "Could not load revisions. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRevisions();
-  }, []);
+    if (sessionId) {
+      fetchRevisions();
+    } else {
+      setLoading(false);
+      setError("Please log in to view revisions.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // refetch when session changes
 
   const handleReviewClick = (rev: RevisionItem) => {
     setSelectedRevision(rev);
@@ -69,10 +89,10 @@ const ReviewerRevisions: FC = () => {
   };
 
   const handleApprove = async () => {
-    if (!selectedRevision) return;
+    if (!selectedRevision || !sessionId) return;
     setApproveSubmitting(true);
     try {
-      const res = await fetch(`${API}?action=markRevisionAddressed`, {
+      const res = await authFetch(`${API}?action=markRevisionAddressed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entry_id: selectedRevision.entryId }),
@@ -92,11 +112,11 @@ const ReviewerRevisions: FC = () => {
   };
 
   const handleConcern = async () => {
-    if (!selectedRevision) return;
+    if (!selectedRevision || !sessionId) return;
     setConcernSubmitting(true);
     try {
       // 1. Create a new review for this manuscript (auto‑accepted)
-      const createRes = await fetch(`${API}?action=createReviewForManuscript`, {
+      const createRes = await authFetch(`${API}?action=createReviewForManuscript`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manuscript_id: selectedRevision.manuscript_id })
@@ -126,7 +146,7 @@ const ReviewerRevisions: FC = () => {
           <h2>Revisions to Review</h2>
           <button
             onClick={fetchRevisions}
-            disabled={loading}
+            disabled={loading || !sessionId}
             style={{
               display: "flex",
               alignItems: "center",
@@ -135,8 +155,8 @@ const ReviewerRevisions: FC = () => {
               borderRadius: "6px",
               border: "1px solid #d1d5db",
               background: "#f3f4f6",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
+              cursor: (loading || !sessionId) ? "not-allowed" : "pointer",
+              opacity: (loading || !sessionId) ? 0.6 : 1,
             }}
           >
             <RotateCcw size={16} />

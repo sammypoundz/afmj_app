@@ -1,9 +1,13 @@
+import React from 'react';
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext";
+import Login from "./pages/Login";
 
 /* Layouts */
 import EICLayout from "./layout/EICLayout";
 import EditorLayout from "./layout/EditorLayout";
 import ReviewerLayout from "./layout/ReviewerLayout";
+import AuthorLayout from "./layout/AuthorLayout";
 
 /* ================= EIC Pages ================= */
 import Dashboard from "./pages/eic/Dashboard";
@@ -42,8 +46,7 @@ import ReviewerOverdue from "./pages/reviewer/OverdueReviews";
 import ReviewerAnalytics from "./pages/reviewer/ReviewerAnalytics";
 import ReviewSubmissionPage from "./pages/reviewer/ReviewSubmissionPage";
 
-/* Author Pages */
-import AuthorLayout from "./layout/AuthorLayout";
+/* ================= Author Pages ================= */
 import AuthorDashboard from "./pages/author/AuthorDashboard";
 import AuthorSubmissions from "./pages/author/AuthorSubmissions";
 import AuthorNewSubmission from "./pages/author/AuthorNewSubmission";
@@ -52,50 +55,110 @@ import AuthorRevisions from "./pages/author/AuthorRevisions";
 import AuthorPublished from "./pages/author/AuthorPublished";
 import AuthorProfile from "./pages/author/AuthorProfile";
 
+interface ProtectedRouteProps {
+  children: React.ReactElement;
+  allowedRoles?: string[];
+}
+
+const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    // If the user is admin but allowedRoles only contains eic, treat admin as eic
+    if (user.role === 'admin' && allowedRoles.includes('eic')) {
+      return children;
+    }
+    return <Navigate to={`/${user.role}`} replace />;
+  }
+
+  return children;
+};
+
 const AppRoutes = () => {
+  const { user } = useAuth();
+
   return (
     <Routes>
+      {/* Public route */}
+      <Route path="/login" element={<Login />} />
 
-      {/* ================= EIC AREA ================= */}
-      <Route path="/" element={<EICLayout />}>
-        <Route index element={<Dashboard />} />
+      {/* Root redirect based on role */}
+      <Route
+        path="/"
+        element={
+          user ? (
+            <Navigate to={user.role === 'admin' ? '/eic' : `/${user.role}`} replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* ================= EIC AREA (also accessible by admin) ================= */}
+      <Route
+        path="/eic"
+        element={
+          <ProtectedRoute allowedRoles={['eic', 'admin']}>
+            <EICLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="manuscripts" element={<Manuscripts />} />
         <Route path="manuscripts/:status" element={<ManuscriptCategoryView />} />
         <Route path="publications/published" element={<Published />} />
-        <Route path="/users/reviewers" element={<UserReviewer />} />
-        <Route path="/users/editors" element={<UserEditor />} />
-        <Route path="/users/authors" element={<UserAuthor />} />
+        <Route path="users/reviewers" element={<UserReviewer />} />
+        <Route path="users/editors" element={<UserEditor />} />
+        <Route path="users/authors" element={<UserAuthor />} />
         <Route path="notifications" element={<Notifications />} />
-        <Route path="eic/settings" element={<Settings />} />
-        <Route path="eic/ProfileAndLogs" element={<ProfileAndLogs />} />
-        <Route path="eic/analytics" element={<Analytics />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="profile" element={<ProfileAndLogs />} />
+        <Route path="analytics" element={<Analytics />} />
         <Route path="publications/decision" element={<Publication />} />
         <Route path="publications/issues" element={<JournalIssues />} />
       </Route>
 
       {/* ================= EDITOR AREA ================= */}
-      <Route path="/editor" element={<EditorLayout />}>
+      <Route
+        path="/editor"
+        element={
+          <ProtectedRoute allowedRoles={['editor']}>
+            <EditorLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<EditorDashboard />} />
-
-        {/* Manuscript Status Pages */}
         <Route path="manuscripts/new" element={<EditorNewSubmissions />} />
         <Route path="manuscripts/review" element={<EditorUnderReview />} />
         <Route path="manuscripts/revisions" element={<EditorRevisions />} />
         <Route path="manuscripts/accepted" element={<EditorAccepted />} />
         <Route path="manuscripts/rejected" element={<EditorRejected />} />
-
-        {/* Dynamic Workspace */}
         <Route path="manuscripts/:id" element={<EditorManuscriptWorkspace />} />
-
-        {/* Quick Actions */}
         <Route path="assign-reviewers" element={<ReviewerAssignmentPage />} />
         <Route path="review-progress" element={<ReviewProgressPage />} />
         <Route path="handle-revisions" element={<RevisionHandlingPage />} />
       </Route>
 
       {/* ================= REVIEWER AREA ================= */}
-      <Route path="/reviewer" element={<ReviewerLayout />}>
+      <Route
+        path="/reviewer"
+        element={
+          <ProtectedRoute allowedRoles={['reviewer']}>
+            <ReviewerLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<ReviewerDashboard />} />
         <Route path="invitations" element={<ReviewerInvitations />} />
         <Route path="active" element={<ReviewerActiveReviews />} />
@@ -103,16 +166,20 @@ const AppRoutes = () => {
         <Route path="completed" element={<ReviewerCompleted />} />
         <Route path="overdue" element={<ReviewerOverdue />} />
         <Route path="analytics" element={<ReviewerAnalytics />} />
-
-        {/* Dynamic Review Submission – by review ID (from active reviews) */}
         <Route path="submit/:id" element={<ReviewSubmissionPage />} />
-
-        {/* New route for re‑evaluating a manuscript (from revision concern) */}
         <Route path="submit/manuscript/:id" element={<ReviewSubmissionPage />} />
       </Route>
 
       {/* ================= AUTHOR AREA ================= */}
-      <Route path="/author" element={<AuthorLayout />}>
+      <Route
+        path="/author"
+        element={
+          <ProtectedRoute allowedRoles={['author']}>
+            <AuthorLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<AuthorDashboard />} />
         <Route path="submissions" element={<AuthorSubmissions />} />
         <Route path="submit" element={<AuthorNewSubmission />} />
@@ -122,9 +189,8 @@ const AppRoutes = () => {
         <Route path="profile" element={<AuthorProfile />} />
       </Route>
 
-      {/* ================= FALLBACK ================= */}
+      {/* Fallback for unknown routes */}
       <Route path="*" element={<Navigate to="/" replace />} />
-
     </Routes>
   );
 };

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Eye, Calendar, BookOpen, FileText } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -67,11 +68,6 @@ const styles = {
     display: "flex",
     flexDirection: "column" as const,
     gap: "12px",
-  },
-  cardHover: {
-    transform: "translateY(-4px)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
-    borderColor: "#16a34a",
   },
   badge: {
     background: "#16a34a10",
@@ -148,24 +144,39 @@ const styles = {
 
 const AuthorPublished = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [articles, setArticles] = useState<PublishedArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPublished();
-  }, []);
+    if (sessionId) {
+      fetchPublished();
+    } else {
+      setLoading(false);
+      setError("No active session. Please log in again.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // refetch when session changes
 
   const fetchPublished = async () => {
+    if (!sessionId) return;
+
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?action=getPublishedManuscripts`);
+      const res = await authFetch(`${API_BASE}?action=getPublishedManuscripts`);
+      if (res.status === 401) {
+        setError("Session expired. Please log in again.");
+        setTimeout(() => navigate("/login"), 2000);
+        return;
+      }
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to fetch published articles");
       }
       const data = await res.json();
       setArticles(data);
+      setError(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -178,9 +189,6 @@ const AuthorPublished = () => {
       toast.error("No file available for download");
       return;
     }
-
-    // You could increment download count via API
-    // For now, just trigger download
     window.open(article.file_path, "_blank");
     toast.success(`Downloading ${article.title}`);
   };

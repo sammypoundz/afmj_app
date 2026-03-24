@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 // Spinner component (green theme)
 const Spinner = ({ size = 20, color = "#16a34a" }) => (
@@ -33,6 +34,8 @@ const GlobalStyles = () => (
 const ReviewSubmissionPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
+
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [manuscriptInfo, setManuscriptInfo] = useState<{ manuscriptId: string; title: string } | null>(null);
@@ -58,25 +61,35 @@ const ReviewSubmissionPage = () => {
         return;
       }
 
+      if (!sessionId) {
+        toast.error("No active session. Please log in again.");
+        navigate("/login");
+        return;
+      }
+
       const revId = parseInt(id);
       setReviewId(revId);
       setLoading(true);
 
       try {
-        const res = await fetch(`${API_BASE}?action=getManuscriptPreview&review_id=${revId}`);
-        const data = await res.json();
+        const res = await authFetch(`${API_BASE}?action=getManuscriptPreview&review_id=${revId}`);
         if (!res.ok) {
-          toast.error(data.error || "Failed to load manuscript details");
-          navigate("/reviewer/revisions");
-          return;
+          if (res.status === 401) {
+            toast.error("Session expired. Please log in again.");
+            navigate("/login");
+            return;
+          }
+          const data = await res.json();
+          throw new Error(data.error || "Failed to load manuscript details");
         }
+        const data = await res.json();
         setManuscriptInfo({
           manuscriptId: data.slug,
           title: data.title,
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        toast.error("An error occurred while loading data");
+        toast.error(err.message || "An error occurred while loading data");
         navigate("/reviewer/revisions");
       } finally {
         setLoading(false);
@@ -84,7 +97,7 @@ const ReviewSubmissionPage = () => {
     };
 
     loadData();
-  }, [id, navigate]);
+  }, [id, navigate, authFetch, sessionId]);
 
   const handleScoreChange = (field: string, value: number) => {
     setScores({ ...scores, [field]: value });
@@ -105,6 +118,11 @@ const ReviewSubmissionPage = () => {
       toast.error("No review ID available – cannot submit");
       return;
     }
+    if (!sessionId) {
+      toast.error("Session expired. Please log in again.");
+      navigate("/login");
+      return;
+    }
 
     setSubmitting(true);
     const toastId = toast.loading("Submitting review...");
@@ -123,7 +141,7 @@ const ReviewSubmissionPage = () => {
     }
 
     try {
-      const res = await fetch(`${API_BASE}?action=submitReview`, {
+      const res = await authFetch(`${API_BASE}?action=submitReview`, {
         method: "POST",
         body: formData,
       });
@@ -132,7 +150,12 @@ const ReviewSubmissionPage = () => {
         toast.success("Review submitted successfully!", { id: toastId });
         navigate("/reviewer/active");
       } else {
-        toast.error(data.error || "Submission failed", { id: toastId });
+        if (res.status === 401) {
+          toast.error("Session expired. Please log in again.", { id: toastId });
+          navigate("/login");
+        } else {
+          toast.error(data.error || "Submission failed", { id: toastId });
+        }
       }
     } catch (err) {
       toast.error("Network error", { id: toastId });
@@ -403,26 +426,26 @@ const ReviewSubmissionPage = () => {
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={submitting || !reviewId}
+          disabled={submitting || !reviewId || !sessionId}
           style={{
             width: "100%",
             padding: "16px",
             borderRadius: "40px",
             border: "none",
-            background: submitting || !reviewId ? "#9ca3af" : "#16a34a",
+            background: submitting || !reviewId || !sessionId ? "#9ca3af" : "#16a34a",
             color: "#fff",
             fontSize: "1rem",
             fontWeight: 600,
-            cursor: submitting || !reviewId ? "not-allowed" : "pointer",
+            cursor: submitting || !reviewId || !sessionId ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             transition: "background 0.2s",
-            boxShadow: submitting || !reviewId ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
+            boxShadow: submitting || !reviewId || !sessionId ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
           }}
-          onMouseEnter={(e) => !submitting && reviewId && (e.currentTarget.style.background = "#0d9488")}
-          onMouseLeave={(e) => !submitting && reviewId && (e.currentTarget.style.background = "#16a34a")}
+          onMouseEnter={(e) => !submitting && reviewId && sessionId && (e.currentTarget.style.background = "#0d9488")}
+          onMouseLeave={(e) => !submitting && reviewId && sessionId && (e.currentTarget.style.background = "#16a34a")}
         >
           {submitting ? <Spinner size={20} color="#fff" /> : "Submit Review"}
         </button>

@@ -18,13 +18,18 @@ import {
   History,
   ArrowUp,
   ArrowDown,
+  Download,
+  Upload,
+  Mail,
+  Send,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 /* ================= API ================= */
 const API = "https://afmjonline.com/api/EICmanusciptsapi.php";
 
-/* ================= Global Styles for Animations ================= */
+/* ================= Global Styles ================= */
 const GlobalStyles = () => (
   <style>{`
     @keyframes spin {
@@ -84,8 +89,8 @@ interface Manuscript {
   abstract?: string | null;
   background?: string | null;
   objective?: string | null;
-  methods?: string | null;          // new
-  results?: string | null;          // new
+  methods?: string | null;
+  results?: string | null;
   conclusion?: string | null;
   reviewers?: string[];
   editors?: string[];
@@ -97,6 +102,9 @@ interface Manuscript {
   completedReviews?: number;
   hasRevisions?: boolean;
   hasUploadedRevision?: boolean;
+  revisedFilePath?: string;
+  filePath?: string;              // original manuscript file
+  coverLetterPath?: string;       // NEW: cover letter file
 }
 
 interface Reviewer {
@@ -276,12 +284,12 @@ const Pagination: FC<PaginationProps> = ({
   );
 };
 
-/* ================= Reviewer Modal (with pagination and ordering) ================= */
+/* ================= Reviewer Selection Modal ================= */
 interface ReviewerModalProps {
   reviewers: Reviewer[];
-  currentReviewers: string[];      // initial selected reviewers (ordered)
+  currentReviewers: string[];
   onClose: () => void;
-  onTempSave: (selected: string[]) => void;   // returns ordered array
+  onTempSave: (selected: string[]) => void;
 }
 
 const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
@@ -292,8 +300,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
 }) => {
   const [selected, setSelected] = useState<string[]>([...currentReviewers]);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12; // number of reviewers per page
-
+  const pageSize = 12;
   const maxReviewers = 3;
   const totalPages = Math.ceil(reviewers.length / pageSize);
   const paginatedReviewers = reviewers.slice(
@@ -303,7 +310,6 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
 
   const addReviewer = (name: string) => {
     if (selected.includes(name)) {
-      // Remove if already selected
       setSelected(prev => prev.filter(r => r !== name));
     } else {
       if (selected.length >= maxReviewers) {
@@ -330,13 +336,8 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
 
   const canSave = selected.length === maxReviewers;
 
-  const goToPreviousPage = () => {
-    setCurrentPage(prev => Math.max(1, prev - 1));
-  };
-
-  const goToNextPage = () => {
-    setCurrentPage(prev => Math.min(totalPages, prev + 1));
-  };
+  const goToPreviousPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
 
   return (
     <div
@@ -370,7 +371,6 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
           </button>
         </div>
 
-        {/* Grid of reviewers (paginated) */}
         <div
           style={{
             display: "grid",
@@ -407,7 +407,6 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
           })}
         </div>
 
-        {/* Pagination controls */}
         {totalPages > 1 && (
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginTop: "16px" }}>
             <button
@@ -444,7 +443,6 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
           </div>
         )}
 
-        {/* Ordered list of selected reviewers */}
         {selected.length > 0 && (
           <div style={{ marginTop: "24px" }}>
             <h4>Selected Reviewers (in order of assignment)</h4>
@@ -528,7 +526,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
 /* ================= Single Reviewer Modal (for reassign) ================= */
 interface SingleReviewerModalProps {
   reviewers: Reviewer[];
-  currentReviewerId: number;          // the one being replaced
+  currentReviewerId: number;
   onClose: () => void;
   onSelect: (newReviewerId: number) => Promise<void>;
 }
@@ -542,10 +540,7 @@ const SingleReviewerModal: FC<SingleReviewerModalProps> = ({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const handleSelect = (id: number) => {
-    setSelectedId(id);
-  };
-
+  const handleSelect = (id: number) => setSelectedId(id);
   const handleConfirm = async () => {
     if (!selectedId) return;
     setSaving(true);
@@ -623,12 +618,14 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
   onUpdated,
   allReviewers,
 }) => {
+  const { downloadFile } = useAuth(); // add useAuth
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedRevisions, setExpandedRevisions] = useState<number[]>([0]);
   const [refreshing, setRefreshing] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassigning, setReassigning] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null); // track which file is downloading
 
   const loadData = async () => {
     try {
@@ -662,6 +659,18 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     await loadData();
     onUpdated();
     setRefreshing(false);
+  };
+
+  const handleDownload = async (url: string, fileKey: string) => {
+    setDownloadingFile(fileKey);
+    try {
+      await downloadFile(url);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download file. Please try again.");
+    } finally {
+      setDownloadingFile(null);
+    }
   };
 
   if (loading) {
@@ -883,10 +892,12 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                         }}
                       >
                         {rev.revisedFile && (
-                          <a
-                            href={`/${rev.revisedFile}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(`/${rev.revisedFile}`, `revised_${rev.revisionNumber}`);
+                            }}
+                            disabled={downloadingFile === `revised_${rev.revisionNumber}`}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -900,20 +911,29 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                               fontWeight: 500,
                               transition: "0.2s",
                               boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                              border: "none",
+                              cursor: "pointer",
                             }}
-                            onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#c7d2fe"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "#e0e7ff"}
                           >
-                            <FileText size={18} />
+                            {downloadingFile === `revised_${rev.revisionNumber}` ? (
+                              <Spinner dark />
+                            ) : (
+                              <FileText size={18} />
+                            )}
                             <span>Revised Manuscript</span>
                             <Paperclip size={16} style={{ marginLeft: "4px", opacity: 0.7 }} />
-                          </a>
+                          </button>
                         )}
 
                         {rev.responseFile && (
-                          <a
-                            href={`/${rev.responseFile}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(`/${rev.responseFile}`, `response_${rev.revisionNumber}`);
+                            }}
+                            disabled={downloadingFile === `response_${rev.revisionNumber}`}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -927,13 +947,20 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                               fontWeight: 500,
                               transition: "0.2s",
                               boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                              border: "none",
+                              cursor: "pointer",
                             }}
-                            onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#bbf7d0"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "#d1fae5"}
                           >
-                            <FileText size={18} />
+                            {downloadingFile === `response_${rev.revisionNumber}` ? (
+                              <Spinner dark />
+                            ) : (
+                              <FileText size={18} />
+                            )}
                             <span>Response to Reviewers</span>
                             <Paperclip size={16} style={{ marginLeft: "4px", opacity: 0.7 }} />
-                          </a>
+                          </button>
                         )}
                       </div>
 
@@ -1217,6 +1244,181 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
   );
 };
 
+/* ================= Manuscript File Modal (for Revised category) ================= */
+interface ManuscriptFileModalProps {
+  manuscriptId: number;
+  title: string;
+  currentFilePath: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const ManuscriptFileModal: FC<ManuscriptFileModalProps> = ({
+  manuscriptId,
+  title,
+  currentFilePath,
+  onClose,
+  onConfirm,
+}) => {
+  const { downloadFile } = useAuth(); // add useAuth
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("manuscript_id", manuscriptId.toString());
+    formData.append("revised_file", selectedFile);
+    try {
+      const res = await fetch(`${API}?action=updateRevisedFile`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+    } catch (err: any) {
+      alert(err.message);
+      return;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleProceed = async () => {
+    if (selectedFile) {
+      await handleUpload();
+    }
+    onConfirm();
+  };
+
+  const handleDownload = async () => {
+    if (!currentFilePath) return;
+    setDownloading(true);
+    try {
+      await downloadFile(currentFilePath);
+    } catch (error) {
+      alert("Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1100,
+        padding: "16px",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "16px",
+          width: "90%",
+          maxWidth: "500px",
+          padding: "24px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ margin: 0 }}>Manuscript to Assign</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}>
+            <X size={24} />
+          </button>
+        </div>
+        <p>
+          <strong>{title}</strong>
+        </p>
+        <div style={{ margin: "16px 0" }}>
+          {currentFilePath ? (
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                background: "#e9ecef",
+                borderRadius: "6px",
+                color: "#0d6efd",
+                textDecoration: "none",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
+            >
+              {downloading ? <Spinner /> : <Download size={16} />}
+              {downloading ? "Downloading..." : "Download Current File"}
+            </button>
+          ) : (
+            <span style={{ color: "#6c757d" }}>No file available.</span>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>Replace file (optional)</label>
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+            ref={fileInputRef}
+          />
+          {selectedFile && (
+            <div style={{ marginTop: "8px", fontSize: "0.9rem", color: "#16a34a" }}>
+              Selected: {selectedFile.name}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "1px solid #e2e8f0",
+              background: "#f3f4f6",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleProceed}
+            disabled={uploading}
+            style={{
+              padding: "8px 20px",
+              borderRadius: "6px",
+              border: "none",
+              background: "#0d6efd",
+              color: "#fff",
+              cursor: uploading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              opacity: uploading ? 0.7 : 1,
+            }}
+          >
+            {uploading ? <Spinner /> : <CheckCircle size={16} />}
+            {uploading ? "Uploading..." : "Proceed to Assign"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ================= Manuscript Modal ================= */
 interface ModalProps {
   manuscriptId: number;
@@ -1226,6 +1428,7 @@ interface ModalProps {
 
 const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) => {
   const navigate = useNavigate();
+  const { downloadFile } = useAuth(); // add useAuth
 
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
@@ -1237,6 +1440,22 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const [tempEditorId, setTempEditorId] = useState<number | null>(null);
   const [tempReviewers, setTempReviewers] = useState<string[]>([]);
   const [reassignTarget, setReassignTarget] = useState<{ manuscriptId: number; oldReviewerId: number; oldReviewerName: string } | null>(null);
+  const [downloadingFile, setDownloadingFile] = useState(false); // for file download
+
+  // State for email modal
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailDecision, setEmailDecision] = useState<"reject" | "revision" | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
+  // State for file upload (new submissions)
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // State for cover letter download
+  const [downloadingCoverLetter, setDownloadingCoverLetter] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -1313,6 +1532,112 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     } finally {
       setBtnLoading(null);
       setReassignTarget(null);
+    }
+  };
+
+  // Email modal handlers
+  const openEmailModal = (decision: "reject" | "revision") => {
+    if (!manuscript) return;
+    setEmailDecision(decision);
+    setEmailSubject(`Decision on your submission ${formatManuscriptId(manuscript.id)}`);
+    const defaultBody = `Dear Author,\n\nThank you for submitting your manuscript "${manuscript.title}". After careful review, we have decided to ${decision === "reject" ? "reject" : "request revisions"}.\n\n`;
+    setEmailBody(defaultBody);
+    setEmailModalOpen(true);
+  };
+
+  const sendEmailAndDecide = async () => {
+    if (!manuscript || !emailDecision) return;
+    setEmailSending(true);
+    try {
+      // First send the email
+      const emailRes = await fetch(`${API}?action=sendDecisionEmail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manuscript_id: manuscript.id,
+          decision: emailDecision,
+          subject: emailSubject,
+          body: emailBody,
+        }),
+      });
+      if (!emailRes.ok) {
+        const err = await emailRes.json();
+        throw new Error(err.error || "Failed to send email");
+      }
+
+      // Then update manuscript status
+      const decisionRes = await fetch(`${API}?action=decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manuscript_id: manuscript.id, decision: emailDecision }),
+      });
+      if (!decisionRes.ok) {
+        const err = await decisionRes.json();
+        throw new Error(err.error || "Failed to update manuscript status");
+      }
+
+      setEmailModalOpen(false);
+      onUpdated();
+      onClose();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // File upload handler for new submissions
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !manuscript) return;
+    setUploadingFile(true);
+    const formData = new FormData();
+    formData.append("manuscript_id", manuscript.id.toString());
+    formData.append("file", selectedFile);
+    try {
+      const res = await fetch(`${API}?action=updateManuscriptFile`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      // Refresh manuscript data
+      const updated = await fetch(`${API}?action=show&id=${manuscript.id}`).then(r => r.json());
+      setManuscript(updated);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleDownload = async (url: string) => {
+    setDownloadingFile(true);
+    try {
+      await downloadFile(url);
+    } catch (error) {
+      alert("Download failed");
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
+  const handleDownloadCoverLetter = async (url: string) => {
+    setDownloadingCoverLetter(true);
+    try {
+      await downloadFile(url);
+    } catch (error) {
+      alert("Download failed");
+    } finally {
+      setDownloadingCoverLetter(false);
     }
   };
 
@@ -1416,6 +1741,122 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           <strong>Authors:</strong> {manuscript.authors}
         </div>
 
+        {/* File management for new submissions */}
+        {isNewSubmission && (
+          <div style={{ marginBottom: "24px", padding: "16px", background: "#f8f9fa", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: "8px" }}>
+              <FileText size={18} /> Manuscript File
+            </h4>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              {manuscript.filePath ? (
+                <button
+                  onClick={() => handleDownload(manuscript.filePath!)}
+                  disabled={downloadingFile}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 16px",
+                    background: "#e9ecef",
+                    borderRadius: "6px",
+                    color: "#0d6efd",
+                    textDecoration: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
+                >
+                  {downloadingFile ? <Spinner /> : <Download size={16} />}
+                  {downloadingFile ? "Downloading..." : "Download Current File"}
+                </button>
+              ) : (
+                <span style={{ color: "#6c757d" }}>No file uploaded yet.</span>
+              )}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleFileSelect}
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                id="manuscript-file-input"
+              />
+              <button
+                onClick={() => document.getElementById("manuscript-file-input")?.click()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  background: "#0d6efd",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                <Upload size={16} />
+                Choose File
+              </button>
+              {selectedFile && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "0.9rem", color: "#16a34a" }}>{selectedFile.name}</span>
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploadingFile}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "#28a745",
+                      color: "#fff",
+                      cursor: uploadingFile ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      opacity: uploadingFile ? 0.7 : 1,
+                    }}
+                  >
+                    {uploadingFile ? <Spinner /> : <Check size={14} />}
+                    {uploadingFile ? "Uploading..." : "Upload"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Cover Letter Section */}
+        {manuscript.coverLetterPath && (
+          <div style={{ marginBottom: "24px", padding: "16px", background: "#f8f9fa", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: "8px" }}>
+              <FileText size={18} /> Cover Letter
+            </h4>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={() => handleDownloadCoverLetter(manuscript.coverLetterPath!)}
+                disabled={downloadingCoverLetter}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  background: "#e9ecef",
+                  borderRadius: "6px",
+                  color: "#0d6efd",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
+              >
+                {downloadingCoverLetter ? <Spinner /> : <Download size={16} />}
+                {downloadingCoverLetter ? "Downloading..." : "Download Cover Letter"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {manuscript.abstract && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Abstract</strong>
@@ -1437,14 +1878,14 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {manuscript.methods && (   // new section
+        {manuscript.methods && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Methods</strong>
             <p style={{ marginTop: "6px", color: "#374151", lineHeight: 1.6 }}>{manuscript.methods}</p>
           </div>
         )}
 
-        {manuscript.results && (   // new section
+        {manuscript.results && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Results</strong>
             <p style={{ marginTop: "6px", color: "#374151", lineHeight: 1.6 }}>{manuscript.results}</p>
@@ -1463,10 +1904,10 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             <h3 style={{ marginBottom: "16px", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}>
               <CheckCircle size={20} /> Finalized Manuscript
             </h3>
-            
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button 
-                onClick={() => window.open(`/manuscripts/${manuscript.id}.pdf`, "_blank")}
+                onClick={() => handleDownload(`/manuscripts/${manuscript.id}.pdf`)}
+                disabled={downloadingFile}
                 style={{
                   padding: "10px 16px",
                   borderRadius: "8px",
@@ -1480,10 +1921,12 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                   fontSize: "0.9rem",
                   fontWeight: 500,
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#1e40af"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "#0d6efd"}
               >
-                <FileText size={18} /> Open Final PDF
+                {downloadingFile ? <Spinner /> : <FileText size={18} />}
+                {downloadingFile ? "Downloading..." : "Download Final PDF"}
               </button>
-
               <button 
                 disabled={productionLoading}
                 onClick={async () => {
@@ -1532,7 +1975,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
               <User size={20} style={{ color: "#198754" }} />
               <strong style={{ color: "#374151" }}>Assign Editor:</strong>
             </div>
-
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               {editors.map((e) => {
                 const isSelected = tempEditorId === e.id;
@@ -1566,7 +2008,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 );
               })}
             </div>
-            
             {tempEditorId && (
               <p style={{ marginTop: "10px", fontSize: "0.85rem", color: "#6b7280", fontStyle: "italic" }}>
                 Click the checked editor to unassign
@@ -1587,7 +2028,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           >
             <UserCheck size={20} style={{ color: "#0d6efd" }} />
             <strong style={{ color: "#374151" }}>Reviewers:</strong>
-
             <button
               onClick={() => setShowReviewerModal(true)}
               style={{
@@ -1607,7 +2047,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             >
               <UserCheck size={16} /> Select
             </button>
-
             <span style={{ marginLeft: "12px", color: "#374151", fontSize: "0.9rem" }}>
               {tempReviewers.join(", ") || "None selected"}
             </span>
@@ -1645,7 +2084,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             <h3 style={{ marginBottom: "16px", color: "#111827", borderBottom: "2px solid #e5e7eb", paddingBottom: "8px" }}>
               Reviewer Feedback
             </h3>
-
             {reviewerProgress.length === 0 ? (
               <p style={{ color: "#6b7280", fontStyle: "italic" }}>No reviewers assigned yet.</p>
             ) : (
@@ -1876,17 +2314,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             >
               <button
                 disabled={btnLoading === "reject"}
-                onClick={async () => {
-                  setBtnLoading("reject");
-                  await fetch(`${API}?action=decision`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ manuscript_id: manuscript.id, decision: "reject" }),
-                  });
-                  setBtnLoading(null);
-                  onUpdated();
-                  onClose();
-                }}
+                onClick={() => openEmailModal("reject")}
                 style={{
                   padding: "10px 18px",
                   borderRadius: "8px",
@@ -1901,23 +2329,13 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                   opacity: btnLoading === "reject" ? 0.7 : 1,
                 }}
               >
-                {btnLoading === "reject" ? <Spinner /> : <XCircle size={18} />}
+                <XCircle size={18} />
                 Reject
               </button>
 
               <button
                 disabled={btnLoading === "revision"}
-                onClick={async () => {
-                  setBtnLoading("revision");
-                  await fetch(`${API}?action=decision`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ manuscript_id: manuscript.id, decision: "revision" }),
-                  });
-                  setBtnLoading(null);
-                  onUpdated();
-                  onClose();
-                }}
+                onClick={() => openEmailModal("revision")}
                 style={{
                   padding: "10px 18px",
                   borderRadius: "8px",
@@ -1932,7 +2350,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                   opacity: btnLoading === "revision" ? 0.7 : 1,
                 }}
               >
-                {btnLoading === "revision" ? <Spinner /> : <Edit3 size={18} />}
+                <Edit3 size={18} />
                 Request Revision
               </button>
 
@@ -1991,6 +2409,113 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           onSelect={handleReassignReviewer}
         />
       )}
+
+      {/* Email Editor Modal */}
+      {emailModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1100,
+            padding: "16px",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "16px",
+              width: "90%",
+              maxWidth: "600px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              padding: "24px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Mail size={20} />
+                {emailDecision === "reject" ? "Rejection Email" : "Revision Request Email"}
+              </h3>
+              <button onClick={() => setEmailModalOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Subject</label>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.95rem",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Email Body</label>
+              <textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={12}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.95rem",
+                  fontFamily: "monospace",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                onClick={() => setEmailModalOpen(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendEmailAndDecide}
+                disabled={emailSending}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: "#0d6efd",
+                  color: "#fff",
+                  cursor: emailSending ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  opacity: emailSending ? 0.7 : 1,
+                }}
+              >
+                {emailSending ? <Spinner /> : <Send size={16} />}
+                Send & {emailDecision === "reject" ? "Reject" : "Request Revision"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1999,6 +2524,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
 const ManuscriptCategoryView: FC = () => {
   const { status } = useParams();
   const navigate = useNavigate();
+  const { downloadFile } = useAuth(); // add useAuth
 
   const readableStatus = deslugify(status || "");
   const [manuscripts, setManuscripts] = useState<Manuscript[]>([]);
@@ -2008,6 +2534,8 @@ const ManuscriptCategoryView: FC = () => {
   const [loadingList, setLoadingList] = useState(false);
   const [reviewerTarget, setReviewerTarget] = useState<Manuscript | null>(null);
   const [allReviewers, setAllReviewers] = useState<Reviewer[]>([]);
+  const [fileModalManuscript, setFileModalManuscript] = useState<Manuscript | null>(null);
+  const [downloadingManuscriptId, setDownloadingManuscriptId] = useState<number | null>(null); // track which manuscript is downloading
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -2022,6 +2550,8 @@ const ManuscriptCategoryView: FC = () => {
       const manuscriptsWithCompleted = (data.data || []).map((m: any) => ({
         ...m,
         completedReviews: m.completedReviews ?? 0,
+        revisedFilePath: m.revisedFilePath ?? null,
+        coverLetterPath: m.coverLetterPath ?? null, // ensure cover letter path is included
       }));
       setManuscripts(manuscriptsWithCompleted);
       setAllReviewers(reviewers);
@@ -2090,6 +2620,17 @@ const ManuscriptCategoryView: FC = () => {
     return false;
   };
 
+  const handleDownloadManuscript = async (manuscriptId: number, url: string) => {
+    setDownloadingManuscriptId(manuscriptId);
+    try {
+      await downloadFile(url);
+    } catch (error) {
+      alert("Download failed");
+    } finally {
+      setDownloadingManuscriptId(null);
+    }
+  };
+
   return (
     <>
       <GlobalStyles />
@@ -2131,7 +2672,7 @@ const ManuscriptCategoryView: FC = () => {
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Date</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Review Status</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Actions</th>
-                  </tr>
+                    </tr>
                 </thead>
                 <tbody>
                   {currentManuscripts.map((m) => {
@@ -2237,7 +2778,13 @@ const ManuscriptCategoryView: FC = () => {
                               <button
                                 title="Assign Reviewer"
                                 style={{ ...glassBtnStyle, color: "#0d6efd", padding: "6px 8px" }}
-                                onClick={() => setReviewerTarget(m)}
+                                onClick={() => {
+                                  if (readableStatus === "Revised") {
+                                    setFileModalManuscript(m);
+                                  } else {
+                                    setReviewerTarget(m);
+                                  }
+                                }}
                                 onMouseEnter={hoverGlass}
                                 onMouseLeave={leaveGlass}
                               >
@@ -2262,12 +2809,19 @@ const ManuscriptCategoryView: FC = () => {
                             <button
                               title="Open Manuscript"
                               style={{ ...glassBtnStyle, color: "#6c757d", padding: "6px 8px" }}
-                              onClick={() => window.open(`/manuscripts/${m.id}.pdf`, "_blank")}
+                              onClick={() => handleDownloadManuscript(m.id, `/manuscripts/${m.id}.pdf`)}
+                              disabled={downloadingManuscriptId === m.id}
                               onMouseEnter={hoverGlass}
                               onMouseLeave={leaveGlass}
                             >
-                              <FileText size={16} />
-                              <span style={{ marginLeft: "4px" }}>PDF</span>
+                              {downloadingManuscriptId === m.id ? (
+                                <Spinner />
+                              ) : (
+                                <FileText size={16} />
+                              )}
+                              <span style={{ marginLeft: "4px" }}>
+                                {downloadingManuscriptId === m.id ? "Downloading..." : "Word Docx"}
+                              </span>
                             </button>
                           </div>
                         </td>
@@ -2328,6 +2882,19 @@ const ManuscriptCategoryView: FC = () => {
 
               setReviewerTarget(null);
               loadList();
+            }}
+          />
+        )}
+
+        {fileModalManuscript && (
+          <ManuscriptFileModal
+            manuscriptId={fileModalManuscript.id}
+            title={fileModalManuscript.title}
+            currentFilePath={fileModalManuscript.revisedFilePath ?? null}
+            onClose={() => setFileModalManuscript(null)}
+            onConfirm={() => {
+              setFileModalManuscript(null);
+              setReviewerTarget(fileModalManuscript);
             }}
           />
         )}

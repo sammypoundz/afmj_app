@@ -2,18 +2,16 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  // FileText,
   Calendar,
   User,
   Clock,
   Download,
   Mail,
   CheckCircle,
-  // XCircle,
   AlertCircle,
   RefreshCcw
-  // Eye
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -63,6 +61,7 @@ interface RevisionEntry {
 const AuthorManuscriptDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [revisions, setRevisions] = useState<RevisionEntry[]>([]);
@@ -72,8 +71,20 @@ const AuthorManuscriptDetails = () => {
   useEffect(() => {
     const fetchDetails = async () => {
       if (!id) return;
+      if (!sessionId) {
+        setError("No active session. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
       try {
-        const res = await fetch(`${API_BASE}?action=getManuscriptDetails&manuscript_id=${id}`);
+        const res = await authFetch(`${API_BASE}?action=getManuscriptDetails&manuscript_id=${id}`);
+        if (res.status === 401) {
+          setError("Session expired. Please log in again.");
+          // Optionally redirect after a delay
+          setTimeout(() => navigate("/login"), 2000);
+          return;
+        }
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || "Failed to fetch manuscript details");
@@ -89,7 +100,7 @@ const AuthorManuscriptDetails = () => {
       }
     };
     fetchDetails();
-  }, [id]);
+  }, [id, authFetch, sessionId, navigate]);
 
   const handleDownload = (filePath: string | null) => {
     if (filePath) window.open(filePath, "_blank");
@@ -343,7 +354,6 @@ const AuthorManuscriptDetails = () => {
               Response Letter
             </button>
           )}
-          {/* If there are any decision letters stored, add buttons here */}
         </div>
 
         {/* If revision required, show action button */}

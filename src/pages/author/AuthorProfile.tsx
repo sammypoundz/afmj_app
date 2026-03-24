@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, User, Mail, Building, Fingerprint } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -122,6 +123,7 @@ const styles = {
 
 const AuthorProfile = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -133,17 +135,26 @@ const AuthorProfile = () => {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [sessionId]); // refetch when session changes (e.g., after login)
 
   const fetchProfile = async () => {
+    if (!sessionId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?action=getProfile`);
+      const res = await authFetch(`${API_BASE}?action=getProfile`);
+      if (res.status === 401) {
+        toast.error("Session expired. Please log in again.");
+        navigate("/login");
+        return;
+      }
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to load profile");
       }
-      const data: ProfileData = await res.json(); // ✅ typed
+      const data: ProfileData = await res.json();
       setFormData({
         name: data.name || "",
         email: data.email || "",
@@ -181,11 +192,17 @@ const AuthorProfile = () => {
     const toastId = toast.loading("Updating profile...");
 
     try {
-      const res = await fetch(`${API_BASE}?action=updateProfile`, {
+      const res = await authFetch(`${API_BASE}?action=updateProfile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
+
+      if (res.status === 401) {
+        toast.error("Session expired. Please log in again.", { id: toastId });
+        navigate("/login");
+        return;
+      }
 
       const result = await res.json();
 

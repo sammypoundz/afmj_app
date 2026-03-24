@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -150,7 +151,6 @@ const styles = {
     fontWeight: 500,
     cursor: "pointer",
   },
-  // Redesigned KPI section
   kpiGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
@@ -249,6 +249,7 @@ const styles = {
 
 const AuthorDashboard = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [manuscripts, setManuscripts] = useState<ActiveManuscript[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
@@ -262,14 +263,30 @@ const AuthorDashboard = () => {
   const [galleyComment, setGalleyComment] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Helper to handle 401 responses
+  const handleUnauthorized = () => {
+    toast.error("Session expired. Please log in again.");
+    navigate("/login");
+  };
+
   useEffect(() => {
     const fetchDashboardData = async () => {
+      if (!sessionId) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const [statsRes, manuscriptsRes, pendingRes] = await Promise.all([
-          fetch(`${API_BASE}?action=getDashboardStats`),
-          fetch(`${API_BASE}?action=getActiveManuscripts`),
-          fetch(`${API_BASE}?action=getPendingPrePublicationActions`),
+          authFetch(`${API_BASE}?action=getDashboardStats`),
+          authFetch(`${API_BASE}?action=getActiveManuscripts`),
+          authFetch(`${API_BASE}?action=getPendingPrePublicationActions`),
         ]);
+
+        if (statsRes.status === 401 || manuscriptsRes.status === 401 || pendingRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
 
         if (!statsRes.ok || !manuscriptsRes.ok || !pendingRes.ok) {
           throw new Error("Failed to fetch dashboard data");
@@ -284,13 +301,14 @@ const AuthorDashboard = () => {
         setPendingActions(pendingData);
       } catch (err) {
         console.error("Error fetching dashboard:", err);
+        toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, []);
+  }, [authFetch, sessionId, navigate]);
 
   const handleNewSubmission = () => navigate("/author/submit");
   const handleViewSubmissions = () => navigate("/author/submissions");
@@ -320,7 +338,6 @@ const AuthorDashboard = () => {
   const openActionModal = (action: PendingAction) => {
     setSelectedAction(action);
     setModalOpen(true);
-    // Reset form fields when opening modal
     setGalleyComment("");
     setSelectedFile(null);
   };
@@ -335,7 +352,6 @@ const AuthorDashboard = () => {
   const handleGalleyProofAction = async (action: "approve" | "reject") => {
     if (!selectedAction) return;
 
-    // Require comment if rejecting
     if (action === "reject" && !galleyComment.trim()) {
       toast.error("Please provide a comment explaining the requested changes");
       return;
@@ -353,20 +369,28 @@ const AuthorDashboard = () => {
     }
 
     try {
-      const res = await fetch(`${API_BASE}?action=updateGalleyProof`, {
+      const res = await authFetch(`${API_BASE}?action=updateGalleyProof`, {
         method: "POST",
         body: formData,
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Submission failed");
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        throw new Error(result.error || "Submission failed");
+      }
 
       toast.success(`Galley proof ${action === "approve" ? "approved" : "changes requested"} successfully`, { id: toastId });
 
       // Refresh pending actions
-      const pendingRes = await fetch(`${API_BASE}?action=getPendingPrePublicationActions`);
+      const pendingRes = await authFetch(`${API_BASE}?action=getPendingPrePublicationActions`);
       if (pendingRes.ok) {
         const pendingData = await pendingRes.json();
         setPendingActions(pendingData);
+      } else if (pendingRes.status === 401) {
+        handleUnauthorized();
       }
 
       closeModal();
@@ -591,7 +615,6 @@ const AuthorDashboard = () => {
                     </>
                   )}
 
-                  {/* Author Response / Comment */}
                   <div style={{ marginTop: "20px" }}>
                     <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
                       Your Response / Comments:
@@ -613,7 +636,6 @@ const AuthorDashboard = () => {
                     />
                   </div>
 
-                  {/* Final Manuscript Upload */}
                   <div style={{ marginTop: "20px" }}>
                     <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
                       Upload Final Manuscript (optional):

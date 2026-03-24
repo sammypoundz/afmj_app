@@ -1,7 +1,7 @@
 import type { FC } from "react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Bell } from "lucide-react"; // added Bell icon
+import { ChevronLeft, ChevronRight, Bell } from "lucide-react";
 import { eicMenu } from "./EICSidebar";
 
 // Mapping from menu label to API response key
@@ -126,33 +126,34 @@ const Sidebar: FC = () => {
             let path = "#";
 
             /* Dashboard */
-            if (item.label === "Dashboard") path = "/dashboard";
+            if (item.label === "Dashboard") path = "/eic/dashboard";
 
             /* Manuscripts */
             else if (group.section === "Manuscripts") {
-              path = `/manuscripts/${item.label
-                .toLowerCase()
-                .replace(/\s+/g, "-")}`;
+              const status = item.label.toLowerCase().replace(/\s+/g, "-");
+              path = `/eic/manuscripts/${status}`;
             }
 
             /* Publications */
             else if (group.section === "Publications") {
-              if (item.label === "Published") path = "/manuscripts/published";
-              else if (item.label === "Publication Decision") path = "/publications/decision";
+              if (item.label === "Published") path = "/eic/publications/published";
+              else if (item.label === "Publication Decision") path = "/eic/publications/decision";
+              else if (item.label === "Journal Issues") path = "/eic/publications/issues";
             }
 
             /* Users */
             else if (group.section === "Users") {
-              if (item.label === "Reviewers") path = "/users/reviewers";
-              else if (item.label === "Editors") path = "/users/editors";
-              else if (item.label === "Authors") path = "/users/authors";
+              if (item.label === "Reviewers") path = "/eic/users/reviewers";
+              else if (item.label === "Editors") path = "/eic/users/editors";
+              else if (item.label === "Authors") path = "/eic/users/authors";
             }
 
             /* System */
             else if (group.section === "System") {
               if (item.label === "Analytics") path = "/eic/analytics";
-              else if (item.label === "Profile & Logs") path = "/eic/ProfileAndLogs";
-              else if (item.label === "Notifications") path = "/notifications"; // placeholder
+              else if (item.label === "Profile & Logs") path = "/eic/profile";
+              else if (item.label === "Notifications") path = "/eic/notifications";
+              else if (item.label === "Settings") path = "/eic/settings";
             }
 
             // Get count from API response (only for labels that have an API key)

@@ -10,6 +10,8 @@ import toast, { Toaster } from "react-hot-toast";
 
 const API_BASE = "https://afmjonline.com/api/EICUsersApi.php";
 
+// const API_BASE = "/api/EICUsersApi.php";
+
 // ================= Types =================
 interface Submission {
   manuscriptTitle: string;

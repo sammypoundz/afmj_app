@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, ExternalLink } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -186,22 +187,46 @@ const styles = {
 
 const AuthorTopBar = () => {
   const navigate = useNavigate();
+  const { logout, authFetch, sessionId } = useAuth(); // 👈 get authFetch and sessionId
   const [user, setUser] = useState<UserInfo | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch user info and notifications on mount
+  // Fetch user info and notifications on mount, and when sessionId changes
   useEffect(() => {
     const fetchData = async () => {
+      if (!sessionId) {
+        setLoading(false);
+        // Optionally redirect to login
+        navigate("/login");
+        return;
+      }
+
       try {
         const [userRes, notifRes] = await Promise.all([
-          fetch(`${API_BASE}?action=getProfile`),
-          fetch(`${API_BASE}?action=getNotifications`),
+          authFetch(`${API_BASE}?action=getProfile`),
+          authFetch(`${API_BASE}?action=getNotifications`),
         ]);
-        if (!userRes.ok) throw new Error("Failed to load user");
-        if (!notifRes.ok) throw new Error("Failed to load notifications");
+
+        if (!userRes.ok) {
+          if (userRes.status === 401) {
+            // Session expired – logout and redirect
+            await logout();
+            navigate("/login");
+            return;
+          }
+          throw new Error("Failed to load user");
+        }
+        if (!notifRes.ok) {
+          if (notifRes.status === 401) {
+            await logout();
+            navigate("/login");
+            return;
+          }
+          throw new Error("Failed to load notifications");
+        }
 
         const userData = await userRes.json();
         const notifData = await notifRes.json();
@@ -210,12 +235,13 @@ const AuthorTopBar = () => {
         setNotifications(notifData);
       } catch (err) {
         console.error(err);
+        toast.error("Could not load user data. Please refresh the page.");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [sessionId, authFetch, logout, navigate]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -231,8 +257,7 @@ const AuthorTopBar = () => {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const handleNotificationClick = async (notif: Notification) => {
-    // Mark as read (could call API)
-    // For now, just close dropdown and navigate if manuscript_id exists
+    // Optionally mark as read via API (not implemented in this example)
     setShowNotifications(false);
     if (notif.related_manuscript_id) {
       navigate(`/author/manuscript/${notif.related_manuscript_id}`);
@@ -246,10 +271,9 @@ const AuthorTopBar = () => {
     toast.success("All notifications marked as read");
   };
 
-  const handleLogout = () => {
-    // Clear session/token and redirect to login
-    // localStorage.removeItem("token");
-    window.location.href = "/login";
+  const handleLogout = async () => {
+    await logout();           // Clear auth state and session
+    navigate("/login");
   };
 
   const formatTime = (dateStr: string) => {

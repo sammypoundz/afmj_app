@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -185,6 +186,7 @@ const getStatusColor = (status: string) => {
 
 const AuthorSubmissions = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
@@ -194,9 +196,21 @@ const AuthorSubmissions = () => {
 
   useEffect(() => {
     const fetchSubmissions = async () => {
+      if (!sessionId) {
+        setLoading(false);
+        setError("No active session. Please log in again.");
+        return;
+      }
+
       setLoading(true);
+      setError(null);
       try {
-        const res = await fetch(`${API_BASE}?action=listSubmissions&page=${currentPage}&limit=${limit}`);
+        const res = await authFetch(`${API_BASE}?action=listSubmissions&page=${currentPage}&limit=${limit}`);
+        if (res.status === 401) {
+          setError("Session expired. Please log in again.");
+          setTimeout(() => navigate("/login"), 2000);
+          return;
+        }
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || "Failed to fetch submissions");
@@ -211,7 +225,7 @@ const AuthorSubmissions = () => {
       }
     };
     fetchSubmissions();
-  }, [currentPage]);
+  }, [authFetch, sessionId, currentPage, navigate]); // Added sessionId and authFetch to dependencies
 
   const handlePageChange = (newPage: number) => {
     if (pagination && newPage >= 1 && newPage <= pagination.pages) {
@@ -329,8 +343,8 @@ const AuthorSubmissions = () => {
               ...styles.paginationButton,
               ...(currentPage === 1 ? styles.paginationButtonDisabled : {}),
             }}
-            onMouseEnter={!currentPage ? undefined : handleButtonMouseEnter}
-            onMouseLeave={!currentPage ? undefined : handleButtonMouseLeave}
+            onMouseEnter={currentPage !== 1 ? handleButtonMouseEnter : undefined}
+            onMouseLeave={currentPage !== 1 ? handleButtonMouseLeave : undefined}
           >
             <ChevronLeft size={16} />
             Previous
@@ -345,8 +359,8 @@ const AuthorSubmissions = () => {
               ...styles.paginationButton,
               ...(currentPage === pagination.pages ? styles.paginationButtonDisabled : {}),
             }}
-            onMouseEnter={currentPage === pagination.pages ? undefined : handleButtonMouseEnter}
-            onMouseLeave={currentPage === pagination.pages ? undefined : handleButtonMouseLeave}
+            onMouseEnter={currentPage !== pagination.pages ? handleButtonMouseEnter : undefined}
+            onMouseLeave={currentPage !== pagination.pages ? handleButtonMouseLeave : undefined}
           >
             Next
             <ChevronRight size={16} />

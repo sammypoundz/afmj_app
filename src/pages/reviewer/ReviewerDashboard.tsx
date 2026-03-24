@@ -10,11 +10,13 @@ import {
   TrendingUp,
   FileText,
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 const ReviewerDashboard = () => {
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth(); // use authenticated fetch
   const [stats, setStats] = useState({
     invitations: 0,
     active: 0,
@@ -30,14 +32,29 @@ const ReviewerDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Only fetch if we have a session ID; otherwise, wait (should not happen on dashboard)
+    if (!sessionId) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
         const [statsRes, actionsRes] = await Promise.all([
-          fetch(`${API_BASE}?action=getDashboardStats`),
-          fetch(`${API_BASE}?action=getPendingActions`)
+          authFetch(`${API_BASE}?action=getDashboardStats`),
+          authFetch(`${API_BASE}?action=getPendingActions`)
         ]);
+
+        // Handle unauthorized responses (e.g., session expired)
+        if (statsRes.status === 401 || actionsRes.status === 401) {
+          // Optionally redirect to login
+          navigate('/login');
+          return;
+        }
+
         const statsData = await statsRes.json();
         const actionsData = await actionsRes.json();
+
         if (statsRes.ok) setStats(statsData);
         if (actionsRes.ok) setPendingActions(actionsData);
       } catch (err) {
@@ -47,14 +64,14 @@ const ReviewerDashboard = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [authFetch, sessionId, navigate]);
 
   const statItems = [
     {
       label: "Review Invitations",
       value: stats.invitations,
       icon: Mail,
-      trend: "+0", // You can calculate trend later
+      trend: "+0",
       path: "/reviewer/invitations",
     },
     {

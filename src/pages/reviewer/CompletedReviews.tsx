@@ -1,7 +1,8 @@
 import { type FC, useState, useEffect } from "react";
 import { RotateCcw } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API = "https://afmjonline.com/api/reviewerApi.php"; // adjust if needed
+const API = "/api/reviewerApi.php";
 
 interface CompletedItem {
   id: number;
@@ -49,13 +50,28 @@ const ReviewerCompleted: FC = () => {
   const [completed, setCompleted] = useState<CompletedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { authFetch, sessionId } = useAuth();
 
   const fetchCompleted = async () => {
+    // If no session ID, we can't authenticate – redirect or wait
+    if (!sessionId) {
+      setLoading(false);
+      setError("No active session. Please log in.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}?action=listCompleted`);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const res = await authFetch(`${API}?action=listCompleted`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError("Session expired. Please log in again.");
+          // Optionally trigger logout
+          return;
+        }
+        throw new Error(`HTTP error ${res.status}`);
+      }
       const data = await res.json();
       setCompleted(data);
     } catch (err) {
@@ -67,8 +83,15 @@ const ReviewerCompleted: FC = () => {
   };
 
   useEffect(() => {
-    fetchCompleted();
-  }, []);
+    // Only fetch if we have a sessionId; otherwise, we can't authenticate.
+    if (sessionId) {
+      fetchCompleted();
+    } else {
+      setLoading(false);
+      setError("Please log in to view completed reviews.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // re‑run when session changes (e.g., after login)
 
   // Helper to style recommendation badge
   const getRecommendationClass = (rec: string | null) => {
@@ -90,7 +113,7 @@ const ReviewerCompleted: FC = () => {
           <h2>Completed Reviews</h2>
           <button
             onClick={fetchCompleted}
-            disabled={loading}
+            disabled={loading || !sessionId}
             style={{
               display: "flex",
               alignItems: "center",
@@ -99,8 +122,8 @@ const ReviewerCompleted: FC = () => {
               borderRadius: "6px",
               border: "1px solid #d1d5db",
               background: "#f3f4f6",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
+              cursor: loading || !sessionId ? "not-allowed" : "pointer",
+              opacity: loading || !sessionId ? 0.6 : 1,
             }}
           >
             <RotateCcw size={16} />

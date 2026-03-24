@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { FC } from "react";
-import { Bell, Search, UserCircle, X, Loader } from "lucide-react";
+import { Bell, Search, UserCircle, X, Loader, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "./useNotifications";
+import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
 
 const API_BASE = "https://afmjonline.com/api/EICmanusciptsapi.php";
@@ -10,6 +11,7 @@ const API_BASE = "https://afmjonline.com/api/EICmanusciptsapi.php";
 const TopBar: FC = () => {
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
+  const { logout } = useAuth();
 
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<{ id: number; title: string; author: string }[]>([]);
@@ -50,7 +52,7 @@ const TopBar: FC = () => {
   useEffect(() => {
     debouncedSearch(search);
     return () => {
-      debouncedSearch.cancel(); // ✅ Now TypeScript knows about .cancel()
+      debouncedSearch.cancel();
     };
   }, [search, debouncedSearch]);
 
@@ -66,7 +68,7 @@ const TopBar: FC = () => {
   }, []);
 
   const handleSelectManuscript = (id: number) => {
-    navigate(`/manuscripts/${id}`); // adjust route as needed
+    navigate(`/manuscripts/${id}`);
     setSearch("");
     setDropdownOpen(false);
   };
@@ -75,6 +77,11 @@ const TopBar: FC = () => {
     setSearch("");
     setResults([]);
     setDropdownOpen(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
   };
 
   return (
@@ -200,22 +207,31 @@ const TopBar: FC = () => {
           )}
         </button>
 
-        {/* Settings */}
-        {/* <button
-          onClick={() => navigate("/eic/settings")}
-          style={{ background: "transparent", border: "none", cursor: "pointer" }}
-        >
-          <Settings size={18} />
-        </button> */}
-
         {/* Profile */}
         <div
-          onClick={() => navigate("/eic/ProfileAndLogs")}
+          onClick={() => navigate("/eic/profile")}
           style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
         >
           <UserCircle size={22} />
           <span>EIC</span>
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            color: "#6b7280",
+          }}
+        >
+          <LogOut size={18} />
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   );

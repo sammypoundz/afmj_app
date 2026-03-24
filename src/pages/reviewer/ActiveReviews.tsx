@@ -11,11 +11,12 @@ import {
   Calendar,
   Clock,
   Download,
-  BarChart,      // for Results
-  FlaskConical,  // for Methods (optional, if you prefer a scientific icon)
+  BarChart,
+  FlaskConical,
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 interface ActiveReview {
   id: number;
@@ -31,8 +32,8 @@ interface ManuscriptPreview {
   abstract: string;
   background: string;
   objective: string;
-  methods?: string;      // new
-  results?: string;      // new
+  methods?: string;
+  results?: string;
   conclusion: string;
   study_type: string;
   author_name: string;
@@ -77,18 +78,28 @@ const ReviewerActiveReviews = () => {
   const [previewData, setPreviewData] = useState<ManuscriptPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
 
   const fetchActiveReviews = async () => {
+    if (!sessionId) {
+      // No session ID – likely not authenticated; redirect or handle gracefully
+      navigate("/login");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}?action=listActive`);
-      const data = await res.json();
-      if (res.ok) {
-        setReviews(data);
-      } else {
-        console.error("Failed to fetch active reviews:", data.error);
+      const res = await authFetch(`${API_BASE}?action=listActive`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          navigate("/login");
+          return;
+        }
+        throw new Error(`Failed to fetch active reviews: ${res.status}`);
       }
+      const data = await res.json();
+      setReviews(data);
     } catch (err) {
-      console.error("Network error:", err);
+      console.error("Error fetching active reviews:", err);
     } finally {
       setLoading(false);
     }
@@ -96,7 +107,8 @@ const ReviewerActiveReviews = () => {
 
   useEffect(() => {
     fetchActiveReviews();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // refetch if sessionId changes (e.g., after login)
 
   const openPreview = async (review: ActiveReview) => {
     setSelectedReview(review);
@@ -104,16 +116,19 @@ const ReviewerActiveReviews = () => {
     setPreviewLoading(true);
     setPreviewData(null);
     try {
-      const res = await fetch(`${API_BASE}?action=getManuscriptPreview&review_id=${review.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setPreviewData(data);
-      } else {
-        alert(data.error || "Failed to load manuscript details");
-        setModalOpen(false);
+      const res = await authFetch(`${API_BASE}?action=getManuscriptPreview&review_id=${review.id}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          navigate("/login");
+          return;
+        }
+        throw new Error("Failed to load manuscript details");
       }
+      const data = await res.json();
+      setPreviewData(data);
     } catch (err) {
-      alert("Network error");
+      console.error("Error loading manuscript preview:", err);
+      alert("Failed to load manuscript details. Please try again.");
       setModalOpen(false);
     } finally {
       setPreviewLoading(false);

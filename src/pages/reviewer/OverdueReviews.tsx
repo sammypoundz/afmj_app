@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, BookOpen, Target, CheckCircle, User, X, Calendar, Clock, Download } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API_BASE = "https://afmjonline.com/api/reviewerApi.php";
+const API_BASE = "/api/reviewerApi.php";
 
 interface OverdueReview {
   id: number;
@@ -82,12 +83,23 @@ const ReviewerOverdue = () => {
   const [previewData, setPreviewData] = useState<ManuscriptPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const navigate = useNavigate();
+  const { authFetch, sessionId } = useAuth();
 
   useEffect(() => {
     const fetchOverdue = async () => {
+      if (!sessionId) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const response = await fetch(`${API_BASE}?action=listOverdue`);
+        const response = await authFetch(`${API_BASE}?action=listOverdue`);
         if (!response.ok) {
+          if (response.status === 401) {
+            // Session expired – redirect or show message
+            setError("Session expired. Please log in again.");
+            return;
+          }
           throw new Error("Failed to fetch overdue reviews");
         }
         const data: OverdueReview[] = await response.json();
@@ -104,10 +116,10 @@ const ReviewerOverdue = () => {
     };
 
     fetchOverdue();
-  }, []);
+  }, [sessionId, authFetch]);
 
   const openPreview = async (review: OverdueReview) => {
-    if (!review.accepted_at) return; // should not happen because button is disabled, but safeguard
+    if (!review.accepted_at) return;
 
     setSelectedReview(review);
     setModalOpen(true);
@@ -115,16 +127,16 @@ const ReviewerOverdue = () => {
     setPreviewData(null);
 
     try {
-      const res = await fetch(`${API_BASE}?action=getManuscriptPreview&review_id=${review.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setPreviewData(data);
-      } else {
-        alert(data.error || "Failed to load manuscript details");
-        setModalOpen(false);
+      const res = await authFetch(`${API_BASE}?action=getManuscriptPreview&review_id=${review.id}`);
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("Session expired");
+        const data = await res.json();
+        throw new Error(data.error || "Failed to load manuscript details");
       }
-    } catch (err) {
-      alert("Network error");
+      const data = await res.json();
+      setPreviewData(data);
+    } catch (err: any) {
+      alert(err.message);
       setModalOpen(false);
     } finally {
       setPreviewLoading(false);
@@ -287,7 +299,7 @@ const ReviewerOverdue = () => {
                       onClick={() => openPreview(review)}
                       className="responsive-margin-top"
                       style={{
-                        background: "#dc2626", // red for overdue
+                        background: "#dc2626",
                         color: "#fff",
                         border: "none",
                         padding: "12px 24px",
