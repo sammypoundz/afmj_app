@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, FileText, BookOpen, Target, CheckCircle, User, BarChart } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
+import { useAuth } from "../../contexts/AuthContext";
 
 // Global keyframes for spinner animation
 const GlobalStyles = () => (
@@ -16,9 +16,11 @@ const API_BASE = "/api/reviewerApi.php";
 
 interface Invitation {
   id: number;
-  manuscriptId: string;
+  manuscript_id: number;      // numeric ID
+  manuscriptId: string;       // slug (fallback)
   title: string;
   dueDate: string;
+  // optional: year of submission (if added later)
 }
 
 interface ManuscriptPreview {
@@ -33,6 +35,7 @@ interface ManuscriptPreview {
   conclusion: string;
   study_type: string;
   author_name: string;
+  created_at?: string; // if added later
 }
 
 const ReviewerInvitations = () => {
@@ -45,6 +48,12 @@ const ReviewerInvitations = () => {
   const [pendingAction, setPendingAction] = useState<"accept" | "decline" | null>(null);
   const { authFetch, sessionId } = useAuth();
 
+  // Helper to format the manuscript ID
+  const formatManuscriptId = (manuscriptId: number, submissionYear?: number) => {
+    const year = submissionYear || new Date().getFullYear();
+    return `AFMJ-${year}-${manuscriptId}`;
+  };
+
   const fetchInvitations = async () => {
     if (!sessionId) {
       setLoading(false);
@@ -56,7 +65,6 @@ const ReviewerInvitations = () => {
       const res = await authFetch(`${API_BASE}?action=listInvitations`);
       if (!res.ok) {
         if (res.status === 401) {
-          // Session expired – optionally trigger logout
           console.warn("Session expired, redirect to login");
         }
         const data = await res.json();
@@ -78,8 +86,7 @@ const ReviewerInvitations = () => {
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]); // refetch when session changes
+  }, [sessionId]);
 
   const openPreview = async (inv: Invitation) => {
     if (!sessionId) return;
@@ -91,7 +98,6 @@ const ReviewerInvitations = () => {
       const res = await authFetch(`${API_BASE}?action=getManuscriptPreview&review_id=${inv.id}`);
       if (!res.ok) {
         if (res.status === 401) {
-          // Redirect or show error
           throw new Error("Session expired");
         }
         const data = await res.json();
@@ -125,7 +131,7 @@ const ReviewerInvitations = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        await fetchInvitations(); // refresh list
+        await fetchInvitations();
         closeModal();
       } else {
         alert(data.error || `${action} failed`);
@@ -154,7 +160,11 @@ const ReviewerInvitations = () => {
             invitations.map((inv) => (
               <div key={inv.id} className="list-item">
                 <div>
-                  <strong>{inv.manuscriptId}</strong>
+                  <strong>
+                    {inv.manuscript_id
+                      ? formatManuscriptId(inv.manuscript_id)
+                      : inv.manuscriptId}
+                  </strong>
                   <p>{inv.title}</p>
                   <small>Response deadline: {inv.dueDate}</small>
                 </div>
@@ -172,7 +182,7 @@ const ReviewerInvitations = () => {
           )}
         </div>
 
-        {/* Modern Preview Modal (same as before) */}
+        {/* Modern Preview Modal */}
         {modalOpen && selectedInvitation && (
           <div
             style={{
@@ -237,7 +247,11 @@ const ReviewerInvitations = () => {
                     <div style={{ background: "#f9fafb", borderRadius: "12px", padding: "16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                       <div>
                         <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.5px" }}>Manuscript ID</div>
-                        <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb" }}>{previewData.slug}</div>
+                        <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb" }}>
+                          {selectedInvitation.manuscript_id
+                            ? formatManuscriptId(selectedInvitation.manuscript_id)
+                            : previewData.slug}
+                        </div>
                       </div>
                       <div>
                         <div style={{ fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" }}>Study Type</div>

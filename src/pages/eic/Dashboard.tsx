@@ -64,7 +64,7 @@ const Dashboard = () => {
             },
           }
         );
-        console.log("API Response:", response.data); // Debug: check if revisions and gallery_proof are present
+        console.log("API Response:", response.data);
         setData(response.data);
       } catch (err) {
         console.error("API Error:", err);
@@ -83,7 +83,6 @@ const Dashboard = () => {
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
-  // Safely access values with fallback to 0 in case API doesn't return them (though it should)
   const stats = [
     {
       label: "Total Submissions",
@@ -156,114 +155,157 @@ const Dashboard = () => {
     },
   ];
 
+  // Responsive styles
+  const responsiveStyles = `
+    @media (max-width: 768px) {
+      .dashboard .kpi-modern-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+      }
+      .dashboard .dashboard-grid {
+        flex-direction: column !important;
+      }
+      .dashboard .panel {
+        width: 100% !important;
+        margin-bottom: 20px !important;
+      }
+      .dashboard .section-title {
+        font-size: 1.25rem !important;
+        margin-bottom: 16px !important;
+      }
+    }
+    @media (max-width: 480px) {
+      .dashboard .kpi-modern-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .dashboard .kpi-modern-card {
+        padding: 16px !important;
+      }
+      .dashboard .kpi-modern-card h2 {
+        font-size: 1.5rem !important;
+      }
+      .dashboard .kpi-modern-card p {
+        font-size: 0.8rem !important;
+      }
+      .dashboard .action-list li,
+      .dashboard .metric {
+        padding: 12px 16px !important;
+        font-size: 0.9rem !important;
+      }
+    }
+  `;
+
   return (
-    <div className="dashboard">
-      <section className="metrics-section">
-        <h2 className="section-title section-title-light">Manuscript Overview</h2>
+    <>
+      <style>{responsiveStyles}</style>
+      <div className="dashboard">
+        <section className="metrics-section">
+          <h2 className="section-title section-title-light">Manuscript Overview</h2>
 
-        <div className="kpi-modern-grid">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <div
-                key={stat.label}
-                className="kpi-modern-card clickable"
-                onClick={() => navigate(stat.path)}
-              >
-                <div className="kpi-icon">
-                  <Icon size={22} />
+          <div className="kpi-modern-grid">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div
+                  key={stat.label}
+                  className="kpi-modern-card clickable"
+                  onClick={() => navigate(stat.path)}
+                >
+                  <div className="kpi-icon">
+                    <Icon size={22} />
+                  </div>
+                  <div className="kpi-content">
+                    <h2>{stat.value}</h2>
+                    <p>{stat.label}</p>
+                  </div>
+                  <div className="kpi-trend">
+                    <TrendingUp size={14} />
+                  </div>
                 </div>
-                <div className="kpi-content">
-                  <h2>{stat.value}</h2>
-                  <p>{stat.label}</p>
-                </div>
-                <div className="kpi-trend">
-                  <TrendingUp size={14} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+              );
+            })}
+          </div>
+        </section>
 
-      <section className="metrics-section">
-        <h2 className="section-title section-title-light">User Metrics</h2>
-        <div className="kpi-modern-grid">
-          {userMetrics.map((user) => {
-            const Icon = user.icon;
-            return (
-              <div
-                key={user.label}
-                className="kpi-modern-card clickable"
-                onClick={() => navigate(user.path)}
-              >
-                <div className="kpi-icon">
-                  <Icon size={22} />
+        <section className="metrics-section">
+          <h2 className="section-title section-title-light">User Metrics</h2>
+          <div className="kpi-modern-grid">
+            {userMetrics.map((user) => {
+              const Icon = user.icon;
+              return (
+                <div
+                  key={user.label}
+                  className="kpi-modern-card clickable"
+                  onClick={() => navigate(user.path)}
+                >
+                  <div className="kpi-icon">
+                    <Icon size={22} />
+                  </div>
+                  <div className="kpi-content">
+                    <h2>{user.value}</h2>
+                    <p>{user.label}</p>
+                  </div>
+                  <ArrowRight size={16} />
                 </div>
-                <div className="kpi-content">
-                  <h2>{user.value}</h2>
-                  <p>{user.label}</p>
-                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="dashboard-grid">
+          <div className="panel">
+            <h3>Pending Actions</h3>
+            <ul className="action-list">
+              <li onClick={() => navigate("/manuscripts/under-review")}>
+                <AlertCircle size={16} className="danger" />
+                <span>{data.pending.overdue_reviews} reviews overdue</span>
                 <ArrowRight size={16} />
-              </div>
-            );
-          })}
-        </div>
-      </section>
+              </li>
+              <li onClick={() => navigate("/manuscripts")}>
+                <Clock size={16} className="warning" />
+                <span>
+                  {data.pending.awaiting_assignment} manuscripts awaiting assignment
+                </span>
+                <ArrowRight size={16} />
+              </li>
+              <li onClick={() => navigate("/published")}>
+                <CheckCircle size={16} className="success" />
+                <span>
+                  {data.pending.ready_to_publish} decisions ready for publishing
+                </span>
+                <ArrowRight size={16} />
+              </li>
+            </ul>
+          </div>
 
-      <section className="dashboard-grid">
-        <div className="panel">
-          <h3>Pending Actions</h3>
-          <ul className="action-list">
-            <li onClick={() => navigate("/manuscripts/under-review")}>
-              <AlertCircle size={16} className="danger" />
-              <span>{data.pending.overdue_reviews} reviews overdue</span>
-              <ArrowRight size={16} />
-            </li>
-            <li onClick={() => navigate("/manuscripts")}>
-              <Clock size={16} className="warning" />
+          <div className="panel">
+            <h3>Reviewer Performance</h3>
+            <div
+              className="metric clickable"
+              onClick={() => navigate("/reviewers/performance")}
+            >
+              <Clock size={18} />
               <span>
-                {data.pending.awaiting_assignment} manuscripts awaiting assignment
+                Average review time:{" "}
+                <strong>{data.reviewer_performance.average_review_days} days</strong>
               </span>
               <ArrowRight size={16} />
-            </li>
-            <li onClick={() => navigate("/published")}>
-              <CheckCircle size={16} className="success" />
+            </div>
+            <div
+              className="metric clickable"
+              onClick={() => navigate("/reviewers")}
+            >
+              <Users size={18} />
               <span>
-                {data.pending.ready_to_publish} decisions ready for publishing
+                Active reviewers:{" "}
+                <strong>{data.reviewer_performance.active_reviewers}</strong>
               </span>
               <ArrowRight size={16} />
-            </li>
-          </ul>
-        </div>
-
-        <div className="panel">
-          <h3>Reviewer Performance</h3>
-          <div
-            className="metric clickable"
-            onClick={() => navigate("/reviewers/performance")}
-          >
-            <Clock size={18} />
-            <span>
-              Average review time:{" "}
-              <strong>{data.reviewer_performance.average_review_days} days</strong>
-            </span>
-            <ArrowRight size={16} />
+            </div>
           </div>
-          <div
-            className="metric clickable"
-            onClick={() => navigate("/reviewers")}
-          >
-            <Users size={18} />
-            <span>
-              Active reviewers:{" "}
-              <strong>{data.reviewer_performance.active_reviewers}</strong>
-            </span>
-            <ArrowRight size={16} />
-          </div>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   );
 };
 

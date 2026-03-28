@@ -18,7 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -247,9 +247,76 @@ const styles = {
   },
 };
 
+// Responsive styles
+const responsiveStyles = `
+  @media (max-width: 768px) {
+    .author-dashboard {
+      padding: 16px !important;
+    }
+    .dashboard-title {
+      font-size: 1.5rem !important;
+      margin-bottom: 16px !important;
+    }
+    .kpi-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 12px !important;
+    }
+    .kpi-card {
+      padding: 16px !important;
+    }
+    .kpi-value {
+      font-size: 1.5rem !important;
+    }
+    .kpi-label {
+      font-size: 0.8rem !important;
+    }
+    .kpi-icon-wrapper {
+      width: 40px !important;
+      height: 40px !important;
+    }
+    .pending-grid {
+      gap: 12px !important;
+    }
+    .action-buttons {
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+    .action-buttons button {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+    .manuscript-list-item {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 8px !important;
+    }
+    .manuscript-list-item > div:first-child {
+      width: 100% !important;
+    }
+    .manuscript-list-item button {
+      align-self: flex-end !important;
+    }
+  }
+  @media (max-width: 480px) {
+    .kpi-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .pending-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .action-buttons button {
+      padding: 8px 12px !important;
+      font-size: 0.9rem !important;
+    }
+    .section-title {
+      font-size: 1rem !important;
+    }
+  }
+`;
+
 const AuthorDashboard = () => {
   const navigate = useNavigate();
-  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
+  const { authFetch, sessionId } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [manuscripts, setManuscripts] = useState<ActiveManuscript[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
@@ -258,12 +325,9 @@ const AuthorDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
-
-  // State for galley proof form
   const [galleyComment, setGalleyComment] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Helper to handle 401 responses
   const handleUnauthorized = () => {
     toast.error("Session expired. Please log in again.");
     navigate("/login");
@@ -384,7 +448,6 @@ const AuthorDashboard = () => {
 
       toast.success(`Galley proof ${action === "approve" ? "approved" : "changes requested"} successfully`, { id: toastId });
 
-      // Refresh pending actions
       const pendingRes = await authFetch(`${API_BASE}?action=getPendingPrePublicationActions`);
       if (pendingRes.ok) {
         const pendingData = await pendingRes.json();
@@ -403,7 +466,6 @@ const AuthorDashboard = () => {
 
   const handlePayment = async () => {
     if (!selectedAction) return;
-    // Integrate payment gateway here
     toast.success("Redirecting to payment gateway...");
     closeModal();
   };
@@ -414,7 +476,7 @@ const AuthorDashboard = () => {
 
   if (loading) {
     return (
-      <div style={styles.page}>
+      <div className="author-dashboard" style={styles.page}>
         <style>{`
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         `}</style>
@@ -435,277 +497,281 @@ const AuthorDashboard = () => {
   ];
 
   return (
-    <div style={styles.page}>
-      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+    <>
+      <style>{responsiveStyles}</style>
+      <div className="author-dashboard" style={styles.page}>
+        <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
 
-      <h1 style={styles.title}>Author Dashboard</h1>
+        <h1 className="dashboard-title" style={styles.title}>Author Dashboard</h1>
 
-      {/* Pending Pre‑Publication Actions */}
-      {pendingActions.length > 0 && (
-        <div style={styles.pendingSection}>
-          <h3 style={styles.sectionTitle}>Actions Required</h3>
-          <div style={styles.pendingGrid}>
-            {pendingActions.map((action) => (
+        {/* Pending Pre‑Publication Actions */}
+        {pendingActions.length > 0 && (
+          <div style={styles.pendingSection}>
+            <h3 className="section-title" style={styles.sectionTitle}>Actions Required</h3>
+            <div className="pending-grid" style={styles.pendingGrid}>
+              {pendingActions.map((action) => (
+                <div
+                  key={`${action.actionType}-${action.id}`}
+                  style={styles.pendingCard}
+                  onClick={() => openActionModal(action)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#16a34a";
+                    e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.05)";
+                  }}
+                >
+                  <div style={styles.pendingHeader}>
+                    <span style={styles.actionBadge(action.actionType)}>
+                      {action.actionType === "galley" ? "📄 Galley Proof" : "💰 Payment"}
+                    </span>
+                    <AlertCircle size={18} color="#f59e0b" />
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: "1rem", color: "#0f172a" }}>
+                    {action.title}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "4px" }}>
+                    {action.manuscriptId}
+                  </div>
+                  {action.actionType === "payment" && action.paymentAmount && (
+                    <div style={{ marginTop: "8px", fontWeight: 600, color: "#16a34a" }}>
+                      Amount: ${action.paymentAmount}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* KPI Cards */}
+        <div className="kpi-grid" style={styles.kpiGrid}>
+          {kpiData.map((kpi, index) => {
+            const Icon = kpi.icon;
+            return (
               <div
-                key={`${action.actionType}-${action.id}`}
-                style={styles.pendingCard}
-                onClick={() => openActionModal(action)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "#16a34a";
-                  e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.1)";
+                key={index}
+                className="kpi-card"
+                style={{
+                  ...styles.kpiCard,
+                  ...(hoveredKpi === index ? {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+                    borderColor: "#16a34a",
+                  } : {}),
                 }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "#e2e8f0";
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.05)";
+                onMouseEnter={() => setHoveredKpi(index)}
+                onMouseLeave={() => setHoveredKpi(null)}
+                onClick={() => {
+                  if (kpi.label === "Total Submissions") navigate("/author/submissions");
+                  else if (kpi.label === "Under Review") navigate("/author/submissions?filter=under_review");
+                  else if (kpi.label === "Revisions Required") navigate("/author/revisions");
+                  else if (kpi.label === "Accepted") navigate("/author/submissions?filter=accepted");
+                  else if (kpi.label === "Rejected") navigate("/author/submissions?filter=rejected");
+                  else if (kpi.label === "Published") navigate("/author/published");
                 }}
               >
-                <div style={styles.pendingHeader}>
-                  <span style={styles.actionBadge(action.actionType)}>
-                    {action.actionType === "galley" ? "📄 Galley Proof" : "💰 Payment"}
-                  </span>
-                  <AlertCircle size={18} color="#f59e0b" />
-                </div>
-                <div style={{ fontWeight: 600, fontSize: "1rem", color: "#0f172a" }}>
-                  {action.title}
-                </div>
-                <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "4px" }}>
-                  {action.manuscriptId}
-                </div>
-                {action.actionType === "payment" && action.paymentAmount && (
-                  <div style={{ marginTop: "8px", fontWeight: 600, color: "#16a34a" }}>
-                    Amount: ${action.paymentAmount}
+                <div style={styles.kpiHeader}>
+                  <div className="kpi-icon-wrapper" style={styles.kpiIconWrapper}>
+                    <Icon size={24} />
                   </div>
+                </div>
+                <h3 className="kpi-value" style={styles.kpiValue}>{kpi.value}</h3>
+                <p className="kpi-label" style={styles.kpiLabel}>{kpi.label}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Author Actions */}
+        <div style={styles.actionsPanel}>
+          <div className="section-title" style={styles.sectionTitle}>Author Actions</div>
+          <div className="action-buttons" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn-primary" style={{ ...styles.buttonPrimary, ...btnRow }} onClick={handleNewSubmission}>
+              <Plus size={16} />
+              New Submission
+            </button>
+            <button className="btn-outline" style={{ ...styles.buttonSecondary, ...btnRow }} onClick={handleViewSubmissions}>
+              <List size={16} />
+              View Submissions
+            </button>
+            <button className="btn-outline" style={{ ...styles.buttonSecondary, ...btnRow }} onClick={handleRespondRevision}>
+              <Reply size={16} />
+              Respond to Revision
+            </button>
+          </div>
+        </div>
+
+        {/* Active Manuscripts */}
+        <div style={styles.actionsPanel}>
+          <div className="section-title" style={styles.sectionTitle}>Active Manuscripts</div>
+          {manuscripts.length === 0 ? (
+            <p style={{ color: "#6b7280", textAlign: "center", padding: "20px" }}>
+              No active manuscripts.
+            </p>
+          ) : (
+            manuscripts.map((man) => (
+              <div key={man.id} className="manuscript-list-item" style={styles.listItem}>
+                <div>
+                  <div style={styles.manuscriptId}>{man.manuscriptId}</div>
+                  <div style={styles.manuscriptTitle}>{man.title}</div>
+                </div>
+                {getStatusBadge(man.status, man.hasPendingRevision)}
+                <div style={{ fontSize: 13, color: "#6b7280" }}>
+                  {new Date(man.submittedAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </div>
+                <button
+                  className="btn-outline"
+                  style={{ ...styles.buttonSecondary, ...btnRow }}
+                  onClick={() => handleOpenManuscript(man.id)}
+                >
+                  <Eye size={14} />
+                  Open
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Action Modal */}
+        {modalOpen && selectedAction && (
+          <div style={styles.modalOverlay} onClick={closeModal}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader(selectedAction.actionType)}>
+                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  {selectedAction.actionType === "galley" ? <FileCheck size={20} /> : <CreditCard size={20} />}
+                  {selectedAction.actionType === "galley" ? "Galley Proof Review" : "Payment Required"}
+                </h3>
+                <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={styles.modalBody}>
+                <p><strong>Manuscript:</strong> {selectedAction.title}</p>
+                <p><strong>ID:</strong> {selectedAction.manuscriptId}</p>
+
+                {selectedAction.actionType === "galley" ? (
+                  <>
+                    <p><strong>Galley Proof File:</strong></p>
+                    {selectedAction.galleyProofFile ? (
+                      <button
+                        style={{ ...styles.buttonSecondary, marginBottom: "12px" }}
+                        onClick={() => downloadFile(selectedAction.galleyProofFile)}
+                      >
+                        <Download size={16} style={{ marginRight: 6 }} />
+                        Download Galley Proof
+                      </button>
+                    ) : (
+                      <p>No file available</p>
+                    )}
+                    {selectedAction.galleyProofComment && (
+                      <>
+                        <p><strong>Editor's Comment:</strong></p>
+                        <p style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
+                          {selectedAction.galleyProofComment}
+                        </p>
+                      </>
+                    )}
+
+                    <div style={{ marginTop: "20px" }}>
+                      <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                        Your Response / Comments:
+                      </label>
+                      <textarea
+                        value={galleyComment}
+                        onChange={(e) => setGalleyComment(e.target.value)}
+                        placeholder="Add any comments here (required if requesting changes)..."
+                        rows={4}
+                        style={{
+                          width: "100%",
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          fontSize: "0.95rem",
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginTop: "20px" }}>
+                      <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                        Upload Final Manuscript (optional):
+                      </label>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        style={{ marginBottom: "8px" }}
+                      />
+                      {selectedFile && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px", borderRadius: "8px" }}>
+                          <FileText size={16} />
+                          <span>{selectedFile.name}</span>
+                          <button
+                            onClick={() => setSelectedFile(null)}
+                            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>Amount Due:</strong> ${selectedAction.paymentAmount}</p>
+                    <p><strong>Status:</strong> {selectedAction.paymentStatus}</p>
+                    <p style={{ marginTop: 16 }}>
+                      Please complete the payment to proceed with publication.
+                    </p>
+                  </>
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* KPI Cards */}
-      <div style={styles.kpiGrid}>
-        {kpiData.map((kpi, index) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={index}
-              style={{
-                ...styles.kpiCard,
-                ...(hoveredKpi === index ? {
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
-                  borderColor: "#16a34a",
-                } : {}),
-              }}
-              onMouseEnter={() => setHoveredKpi(index)}
-              onMouseLeave={() => setHoveredKpi(null)}
-              onClick={() => {
-                if (kpi.label === "Total Submissions") navigate("/author/submissions");
-                else if (kpi.label === "Under Review") navigate("/author/submissions?filter=under_review");
-                else if (kpi.label === "Revisions Required") navigate("/author/revisions");
-                else if (kpi.label === "Accepted") navigate("/author/submissions?filter=accepted");
-                else if (kpi.label === "Rejected") navigate("/author/submissions?filter=rejected");
-                else if (kpi.label === "Published") navigate("/author/published");
-              }}
-            >
-              <div style={styles.kpiHeader}>
-                <div style={styles.kpiIconWrapper}>
-                  <Icon size={24} />
-                </div>
-              </div>
-              <h3 style={styles.kpiValue}>{kpi.value}</h3>
-              <p style={styles.kpiLabel}>{kpi.label}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Author Actions */}
-      <div style={styles.actionsPanel}>
-        <div style={styles.sectionTitle}>Author Actions</div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button className="btn-primary" style={btnRow} onClick={handleNewSubmission}>
-            <Plus size={16} />
-            New Submission
-          </button>
-          <button className="btn-outline" style={btnRow} onClick={handleViewSubmissions}>
-            <List size={16} />
-            View Submissions
-          </button>
-          <button className="btn-outline" style={btnRow} onClick={handleRespondRevision}>
-            <Reply size={16} />
-            Respond to Revision
-          </button>
-        </div>
-      </div>
-
-      {/* Active Manuscripts */}
-      <div style={styles.actionsPanel}>
-        <div style={styles.sectionTitle}>Active Manuscripts</div>
-        {manuscripts.length === 0 ? (
-          <p style={{ color: "#6b7280", textAlign: "center", padding: "20px" }}>
-            No active manuscripts.
-          </p>
-        ) : (
-          manuscripts.map((man) => (
-            <div key={man.id} style={styles.listItem}>
-              <div>
-                <div style={styles.manuscriptId}>{man.manuscriptId}</div>
-                <div style={styles.manuscriptTitle}>{man.title}</div>
-              </div>
-              {getStatusBadge(man.status, man.hasPendingRevision)}
-              <div style={{ fontSize: 13, color: "#6b7280" }}>
-                {new Date(man.submittedAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </div>
-              <button
-                className="btn-outline"
-                style={btnRow}
-                onClick={() => handleOpenManuscript(man.id)}
-              >
-                <Eye size={14} />
-                Open
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Action Modal */}
-      {modalOpen && selectedAction && (
-        <div style={styles.modalOverlay} onClick={closeModal}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader(selectedAction.actionType)}>
-              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                {selectedAction.actionType === "galley" ? <FileCheck size={20} /> : <CreditCard size={20} />}
-                {selectedAction.actionType === "galley" ? "Galley Proof Review" : "Payment Required"}
-              </h3>
-              <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={styles.modalBody}>
-              <p><strong>Manuscript:</strong> {selectedAction.title}</p>
-              <p><strong>ID:</strong> {selectedAction.manuscriptId}</p>
-
-              {selectedAction.actionType === "galley" ? (
-                <>
-                  <p><strong>Galley Proof File:</strong></p>
-                  {selectedAction.galleyProofFile ? (
+              <div style={styles.modalFooter}>
+                <button style={styles.buttonSecondary} onClick={closeModal} disabled={processing}>
+                  Cancel
+                </button>
+                {selectedAction.actionType === "galley" ? (
+                  <>
                     <button
-                      style={{ ...styles.buttonSecondary, marginBottom: "12px" }}
-                      onClick={() => downloadFile(selectedAction.galleyProofFile)}
+                      style={{ ...styles.buttonSecondary, borderColor: "#dc2626", color: "#dc2626" }}
+                      onClick={() => handleGalleyProofAction("reject")}
+                      disabled={processing}
                     >
-                      <Download size={16} style={{ marginRight: 6 }} />
-                      Download Galley Proof
+                      Request Changes
                     </button>
-                  ) : (
-                    <p>No file available</p>
-                  )}
-                  {selectedAction.galleyProofComment && (
-                    <>
-                      <p><strong>Editor's Comment:</strong></p>
-                      <p style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
-                        {selectedAction.galleyProofComment}
-                      </p>
-                    </>
-                  )}
-
-                  <div style={{ marginTop: "20px" }}>
-                    <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                      Your Response / Comments:
-                    </label>
-                    <textarea
-                      value={galleyComment}
-                      onChange={(e) => setGalleyComment(e.target.value)}
-                      placeholder="Add any comments here (required if requesting changes)..."
-                      rows={4}
-                      style={{
-                        width: "100%",
-                        padding: "12px",
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        fontSize: "0.95rem",
-                        resize: "vertical",
-                        fontFamily: "inherit",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ marginTop: "20px" }}>
-                    <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                      Upload Final Manuscript (optional):
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                      style={{ marginBottom: "8px" }}
-                    />
-                    {selectedFile && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px", borderRadius: "8px" }}>
-                        <FileText size={16} />
-                        <span>{selectedFile.name}</span>
-                        <button
-                          onClick={() => setSelectedFile(null)}
-                          style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p><strong>Amount Due:</strong> ${selectedAction.paymentAmount}</p>
-                  <p><strong>Status:</strong> {selectedAction.paymentStatus}</p>
-                  <p style={{ marginTop: 16 }}>
-                    Please complete the payment to proceed with publication.
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div style={styles.modalFooter}>
-              <button style={styles.buttonSecondary} onClick={closeModal} disabled={processing}>
-                Cancel
-              </button>
-              {selectedAction.actionType === "galley" ? (
-                <>
-                  <button
-                    style={{ ...styles.buttonSecondary, borderColor: "#dc2626", color: "#dc2626" }}
-                    onClick={() => handleGalleyProofAction("reject")}
-                    disabled={processing}
-                  >
-                    Request Changes
-                  </button>
+                    <button
+                      style={styles.buttonPrimary}
+                      onClick={() => handleGalleyProofAction("approve")}
+                      disabled={processing}
+                    >
+                      Approve
+                    </button>
+                  </>
+                ) : (
                   <button
                     style={styles.buttonPrimary}
-                    onClick={() => handleGalleyProofAction("approve")}
+                    onClick={handlePayment}
                     disabled={processing}
                   >
-                    Approve
+                    Proceed to Payment
                   </button>
-                </>
-              ) : (
-                <button
-                  style={styles.buttonPrimary}
-                  onClick={handlePayment}
-                  disabled={processing}
-                >
-                  Proceed to Payment
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };
 

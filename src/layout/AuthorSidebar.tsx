@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
@@ -9,105 +9,272 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  Menu,
 } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+
+// Images (same as used in ReviewerSidebar)
+const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
+const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
+
+// Menu groups and items
+const authorMenu = [
+  {
+    section: "Manuscripts",
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, path: "/author/dashboard" },
+      { label: "My Submissions", icon: FileText, path: "/author/submissions" },
+      { label: "Submit Manuscript", icon: UploadCloud, path: "/author/submit" },
+      { label: "Revisions", icon: RefreshCcw, path: "/author/revisions" },
+      { label: "Published", icon: BookOpen, path: "/author/published" },
+    ],
+  },
+  {
+    section: "Account",
+    items: [
+      { label: "Profile", icon: User, path: "/author/profile" },
+    ],
+  },
+];
 
 const AuthorSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const linkStyle = ({ isActive }: { isActive: boolean }) => ({
-    padding: collapsed ? "12px" : "10px 14px",
-    borderRadius: 8,
-    textDecoration: "none",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: collapsed ? "center" : "flex-start",
-    gap: collapsed ? 0 : 10,
-    marginBottom: 6,
-    background: isActive ? "#dcfce7" : "transparent",
-    color: isActive ? "#15803d" : "#334155",
-    fontWeight: 600,
-    transition: "all .2s ease",
-    whiteSpace: "nowrap" as const,
-  });
+  // Close mobile menu when clicking outside (optional)
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [mobileOpen]);
 
-  const sidebarWidth = collapsed ? 80 : 260;
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    if (window.innerWidth < 768) setMobileOpen(false);
+  };
+
+  const responsiveStyles = `
+    @media (max-width: 767px) {
+      .author-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 280px;
+        background: linear-gradient(180deg, #ffffff, #f6fef9);
+        box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+      }
+      .author-sidebar.mobile-open {
+        transform: translateX(0);
+      }
+      .author-sidebar.collapsed {
+        transform: translateX(-100%);
+      }
+      .mobile-menu-btn {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1001;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .sidebar-header {
+        padding: 1rem;
+      }
+      .collapse-btn {
+        display: none;
+      }
+    }
+    @media (min-width: 768px) {
+      .mobile-menu-btn {
+        display: none;
+      }
+      .author-sidebar {
+        transition: width 0.2s ease;
+      }
+      .author-sidebar.collapsed {
+        width: 80px;
+      }
+      .author-sidebar:not(.collapsed) {
+        width: 280px;
+      }
+      .sidebar-header {
+        padding: 1rem;
+      }
+      .collapse-btn {
+        background: #f1f5f9;
+        border: none;
+        border-radius: 6px;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+      .collapse-btn:hover {
+        background: #e2e8f0;
+      }
+    }
+  `;
 
   return (
-    <aside
-      style={{
-        width: sidebarWidth,
-        padding: collapsed ? "16px 8px" : 24,
-        borderRight: "1px solid rgba(22,163,74,0.12)",
-        background: "linear-gradient(180deg,#ffffff,#f6fef9)",
-        minHeight: "100vh",
-        transition: "width 0.2s ease, padding 0.2s ease",
-        position: "relative",
-        overflowX: "hidden",
-      }}
-    >
-      <div
+    <>
+      <style>{responsiveStyles}</style>
+
+      <button
+        className="mobile-menu-btn"
+        onClick={() => setMobileOpen(!mobileOpen)}
+        aria-label="Toggle menu"
+      >
+        <Menu size={20} />
+      </button>
+
+      <aside
+        ref={sidebarRef}
+        className={`author-sidebar ${collapsed ? "collapsed" : ""} ${
+          mobileOpen ? "mobile-open" : ""
+        }`}
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: collapsed ? "center" : "space-between",
-          marginBottom: 32,
+          background: "linear-gradient(180deg, #ffffff, #f6fef9)",
+          borderRight: "1px solid rgba(22,163,74,0.12)",
+          minHeight: "100vh",
+          overflowX: "hidden",
+          transition: "width 0.2s ease, transform 0.3s ease",
         }}
       >
-        {!collapsed && (
-          <h3
+        <div className="sidebar-header">
+          <div
             style={{
-              fontWeight: 700,
-              color: "#0f172a",
-              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "space-between",
+              width: "100%",
             }}
           >
-            Author Panel
-          </h3>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: "#16a34a",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 4,
-          }}
-        >
-          {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-        </button>
-      </div>
+            {!collapsed ? (
+              // Expanded state: show full logo + collapse button
+              <>
+                <img
+                  src={LOGO_URL}
+                  alt="AFMJ Logo"
+                  style={{
+                    maxWidth: "180px",
+                    width: "100%",
+                    height: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+                <button
+                  className="collapse-btn"
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Collapse sidebar"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              </>
+            ) : (
+              // Collapsed state: show favicon + expand button inline
+              <>
+                <img
+                  src={FAVICON_URL}
+                  alt="AFMJ Icon"
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    objectFit: "contain",
+                    borderRadius: "4px",
+                  }}
+                />
+                <button
+                  className="collapse-btn"
+                  onClick={() => setCollapsed(false)}
+                  aria-label="Expand sidebar"
+                  style={{
+                    marginLeft: "8px",
+                  }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
-      <nav>
-        <NavLink to="/author/dashboard" style={linkStyle}>
-          <LayoutDashboard size={18} />
-          {!collapsed && "Dashboard"}
-        </NavLink>
-        <NavLink to="/author/submissions" style={linkStyle}>
-          <FileText size={18} />
-          {!collapsed && "My Submissions"}
-        </NavLink>
-        <NavLink to="/author/submit" style={linkStyle}>
-          <UploadCloud size={18} />
-          {!collapsed && "Submit Manuscript"}
-        </NavLink>
-        <NavLink to="/author/revisions" style={linkStyle}>
-          <RefreshCcw size={18} />
-          {!collapsed && "Revisions"}
-        </NavLink>
-        <NavLink to="/author/published" style={linkStyle}>
-          <BookOpen size={18} />
-          {!collapsed && "Published"}
-        </NavLink>
-        <NavLink to="/author/profile" style={linkStyle}>
-          <User size={18} />
-          {!collapsed && "Profile"}
-        </NavLink>
-      </nav>
-    </aside>
+        {authorMenu.map((group) => (
+          <div key={group.section} className="menu-group">
+            {!collapsed && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  color: "#64748b",
+                  margin: "16px 8px 8px 12px",
+                }}
+              >
+                {group.section}
+              </p>
+            )}
+
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname.startsWith(item.path);
+
+              return (
+                <div
+                  key={item.label}
+                  onClick={() => handleNavigation(item.path)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: collapsed ? "center" : "space-between",
+                    cursor: "pointer",
+                    background: isActive ? "#dcfce7" : "transparent",
+                    color: isActive ? "#15803d" : "#334155",
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    margin: "2px 8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <Icon size={20} />
+                    {!collapsed && <span>{item.label}</span>}
+                  </div>
+
+                  {/* Optional badge: you can add counts later if needed */}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </aside>
+    </>
   );
 };
 

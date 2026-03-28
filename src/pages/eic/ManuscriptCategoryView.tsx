@@ -24,10 +24,11 @@ import {
   Send,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { useAuth } from "../../contexts/AuthContext";
 
 /* ================= API ================= */
 const API = "https://afmjonline.com/api/EICmanusciptsapi.php";
+const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
 
 /* ================= Global Styles ================= */
 const GlobalStyles = () => (
@@ -103,8 +104,9 @@ interface Manuscript {
   hasRevisions?: boolean;
   hasUploadedRevision?: boolean;
   revisedFilePath?: string;
-  filePath?: string;              // original manuscript file
-  coverLetterPath?: string;       // NEW: cover letter file
+  filePath?: string;
+  circulatingFilePath?: string;   // path of the EIC‑uploaded version
+  coverLetterPath?: string;
 }
 
 interface Reviewer {
@@ -128,7 +130,7 @@ interface ReviewerProgress {
   dueDate?: string;
   completedAt?: string;
   comment?: string;
-  attachment?: string;
+  attachment?: string;          // path to reviewer's uploaded file
   scores?: {
     originality: number | null;
     methodology: number | null;
@@ -618,14 +620,14 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
   onUpdated,
   allReviewers,
 }) => {
-  const { downloadFile } = useAuth(); // add useAuth
+  const { authFetch } = useAuth();
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedRevisions, setExpandedRevisions] = useState<number[]>([0]);
   const [refreshing, setRefreshing] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassigning, setReassigning] = useState(false);
-  const [downloadingFile, setDownloadingFile] = useState<string | null>(null); // track which file is downloading
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -661,10 +663,30 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     setRefreshing(false);
   };
 
-  const handleDownload = async (url: string, fileKey: string) => {
+  const handleDownload = async (filePath: string, fileKey: string, fileNameBase: string) => {
     setDownloadingFile(fileKey);
     try {
-      await downloadFile(url);
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      
+      let extension = "";
+      const parts = filePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      
+      const customFileName = `${fileNameBase}${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Download failed:", error);
       alert("Failed to download file. Please try again.");
@@ -895,7 +917,11 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDownload(`/${rev.revisedFile}`, `revised_${rev.revisionNumber}`);
+                              handleDownload(
+                                rev.revisedFile,
+                                `revised_${rev.revisionNumber}`,
+                                `AFMJ_${manuscriptId}_rev${rev.revisionNumber}_revised`
+                              );
                             }}
                             disabled={downloadingFile === `revised_${rev.revisionNumber}`}
                             style={{
@@ -931,7 +957,11 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDownload(`/${rev.responseFile}`, `response_${rev.revisionNumber}`);
+                              handleDownload(
+                                rev.responseFile,
+                                `response_${rev.revisionNumber}`,
+                                `AFMJ_${manuscriptId}_rev${rev.revisionNumber}_response`
+                              );
                             }}
                             disabled={downloadingFile === `response_${rev.revisionNumber}`}
                             style={{
@@ -1260,7 +1290,7 @@ const ManuscriptFileModal: FC<ManuscriptFileModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  const { downloadFile } = useAuth(); // add useAuth
+  const { authFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -1298,8 +1328,27 @@ const ManuscriptFileModal: FC<ManuscriptFileModalProps> = ({
     if (!currentFilePath) return;
     setDownloading(true);
     try {
-      await downloadFile(currentFilePath);
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(currentFilePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      let extension = "";
+      const parts = currentFilePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      const customFileName = `AFMJ_${manuscriptId}${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
+      console.error("Download failed:", error);
       alert("Download failed");
     } finally {
       setDownloading(false);
@@ -1419,6 +1468,228 @@ const ManuscriptFileModal: FC<ManuscriptFileModalProps> = ({
   );
 };
 
+/* ================= EIC File Upload Modal ================= */
+interface EICFileUploadModalProps {
+  manuscript: Manuscript;
+  onClose: () => void;
+  onProceed: () => void;
+  allReviewers: Reviewer[];
+  onAssignReviewers: (selected: string[]) => Promise<void>;
+}
+
+const EICFileUploadModal: FC<EICFileUploadModalProps> = ({
+  manuscript,
+  onClose,
+  onProceed,
+  allReviewers,
+  onAssignReviewers,
+}) => {
+  const { authFetch } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showReviewerModal, setShowReviewerModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const sourceFilePath = manuscript.revisedFilePath || manuscript.filePath;
+
+  const handleDownload = async (filePath: string, fileNameBase: string) => {
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      const ext = filePath.split('.').pop()?.split('?')[0] || '';
+      const customFileName = `${fileNameBase}${ext ? '.' + ext : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Download failed");
+    }
+  };
+
+  const handleUpload = async (): Promise<boolean> => {
+    if (!selectedFile) return true;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("manuscript_id", manuscript.id.toString());
+    formData.append("circulating_file", selectedFile);
+    try {
+      const res = await fetch(`${API}?action=uploadCirculatingFile`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      alert("Circulating file uploaded successfully!");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return true;
+    } catch (err: any) {
+      alert(err.message);
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleProceed = async () => {
+    const uploadOk = await handleUpload();
+    if (!uploadOk) return;
+    setShowReviewerModal(true);
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 1100,
+          padding: "16px",
+        }}
+      >
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "16px",
+            width: "90%",
+            maxWidth: "600px",
+            padding: "24px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h3 style={{ margin: 0 }}>Upload Circulating Version</h3>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+          </div>
+
+          <p><strong>{manuscript.title}</strong></p>
+
+          <div style={{ marginBottom: "20px" }}>
+            <div style={{ fontWeight: 500, marginBottom: "8px" }}>Original/Revised File</div>
+            {sourceFilePath ? (
+              <button
+                onClick={() => handleDownload(sourceFilePath, `AFMJ_${manuscript.id}_source`)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  background: "#e9ecef",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <Download size={16} /> Download
+              </button>
+            ) : (
+              <span style={{ color: "#6c757d" }}>No file available.</span>
+            )}
+          </div>
+
+          {manuscript.circulatingFilePath && (
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ fontWeight: 500, marginBottom: "8px" }}>Current Circulating Version</div>
+              <button
+                onClick={() => handleDownload(manuscript.circulatingFilePath!, `AFMJ_${manuscript.id}_circulating`)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  background: "#e9ecef",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <Download size={16} /> Download
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+              Upload New Circulating Version (optional)
+            </label>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              ref={fileInputRef}
+            />
+            {selectedFile && (
+              <div style={{ marginTop: "8px", fontSize: "0.9rem", color: "#16a34a" }}>
+                Selected: {selectedFile.name}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                background: "#f3f4f6",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleProceed}
+              disabled={uploading}
+              style={{
+                padding: "8px 20px",
+                borderRadius: "6px",
+                border: "none",
+                background: "#0d6efd",
+                color: "#fff",
+                cursor: uploading ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                opacity: uploading ? 0.7 : 1,
+              }}
+            >
+              {uploading ? <Spinner /> : <CheckCircle size={16} />}
+              {uploading ? "Uploading..." : "Proceed to Assign"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showReviewerModal && (
+        <ReviewerSelectionModal
+          reviewers={allReviewers}
+          currentReviewers={[]}
+          onClose={() => setShowReviewerModal(false)}
+          onTempSave={async (selected) => {
+            await onAssignReviewers(selected);
+            onProceed();
+          }}
+        />
+      )}
+    </>
+  );
+};
+
 /* ================= Manuscript Modal ================= */
 interface ModalProps {
   manuscriptId: number;
@@ -1428,7 +1699,7 @@ interface ModalProps {
 
 const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) => {
   const navigate = useNavigate();
-  const { downloadFile } = useAuth(); // add useAuth
+  const { authFetch } = useAuth();
 
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
@@ -1440,21 +1711,19 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const [tempEditorId, setTempEditorId] = useState<number | null>(null);
   const [tempReviewers, setTempReviewers] = useState<string[]>([]);
   const [reassignTarget, setReassignTarget] = useState<{ manuscriptId: number; oldReviewerId: number; oldReviewerName: string } | null>(null);
-  const [downloadingFile, setDownloadingFile] = useState(false); // for file download
+  const [downloadingFile, setDownloadingFile] = useState(false);
 
-  // State for email modal
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailDecision, setEmailDecision] = useState<"reject" | "revision" | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([]); // NEW
 
-  // State for file upload (new submissions)
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCirculating, setUploadingCirculating] = useState(false);
+  const [selectedCirculatingFile, setSelectedCirculatingFile] = useState<File | null>(null);
+  const circulatingFileInputRef = useRef<HTMLInputElement>(null);
 
-  // State for cover letter download
   const [downloadingCoverLetter, setDownloadingCoverLetter] = useState(false);
 
   useEffect(() => {
@@ -1535,45 +1804,59 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  // Email modal handlers
   const openEmailModal = (decision: "reject" | "revision") => {
     if (!manuscript) return;
     setEmailDecision(decision);
     setEmailSubject(`Decision on your submission ${formatManuscriptId(manuscript.id)}`);
     const defaultBody = `Dear Author,\n\nThank you for submitting your manuscript "${manuscript.title}". After careful review, we have decided to ${decision === "reject" ? "reject" : "request revisions"}.\n\n`;
     setEmailBody(defaultBody);
+    setEmailAttachments([]); // Reset attachments
     setEmailModalOpen(true);
+  };
+
+  const handleAddAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setEmailAttachments(prev => [...prev, ...files]);
+      e.target.value = ''; // allow re-selecting same file
+    }
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setEmailAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const sendEmailAndDecide = async () => {
     if (!manuscript || !emailDecision) return;
     setEmailSending(true);
+    const formData = new FormData();
+    formData.append("manuscript_id", manuscript.id.toString());
+    formData.append("decision", emailDecision);
+    formData.append("subject", emailSubject);
+    formData.append("body", emailBody);
+    for (let i = 0; i < emailAttachments.length; i++) {
+      formData.append("attachments[]", emailAttachments[i]);
+    }
+
     try {
-      // First send the email
       const emailRes = await fetch(`${API}?action=sendDecisionEmail`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          manuscript_id: manuscript.id,
-          decision: emailDecision,
-          subject: emailSubject,
-          body: emailBody,
-        }),
+        body: formData, // Content-Type automatically set to multipart/form-data
       });
+      const result = await emailRes.json();
       if (!emailRes.ok) {
-        const err = await emailRes.json();
-        throw new Error(err.error || "Failed to send email");
+        throw new Error(result.error || "Failed to send email");
       }
 
-      // Then update manuscript status
+      // After email is sent, update manuscript status
       const decisionRes = await fetch(`${API}?action=decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manuscript_id: manuscript.id, decision: emailDecision }),
       });
+      const decisionResult = await decisionRes.json();
       if (!decisionRes.ok) {
-        const err = await decisionRes.json();
-        throw new Error(err.error || "Failed to update manuscript status");
+        throw new Error(decisionResult.error || "Failed to update manuscript status");
       }
 
       setEmailModalOpen(false);
@@ -1586,58 +1869,88 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  // File upload handler for new submissions
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile || !manuscript) return;
-    setUploadingFile(true);
-    const formData = new FormData();
-    formData.append("manuscript_id", manuscript.id.toString());
-    formData.append("file", selectedFile);
-    try {
-      const res = await fetch(`${API}?action=updateManuscriptFile`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
-      // Refresh manuscript data
-      const updated = await fetch(`${API}?action=show&id=${manuscript.id}`).then(r => r.json());
-      setManuscript(updated);
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setUploadingFile(false);
-    }
-  };
-
-  const handleDownload = async (url: string) => {
+  const handleDownload = async (filePath: string, fileNameBase: string) => {
     setDownloadingFile(true);
     try {
-      await downloadFile(url);
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      let extension = "";
+      const parts = filePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      const customFileName = `${fileNameBase}${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
+      console.error("Download failed:", error);
       alert("Download failed");
     } finally {
       setDownloadingFile(false);
     }
   };
 
-  const handleDownloadCoverLetter = async (url: string) => {
+  const handleDownloadCoverLetter = async (filePath: string) => {
     setDownloadingCoverLetter(true);
     try {
-      await downloadFile(url);
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      let extension = "";
+      const parts = filePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      const customFileName = `AFMJ_${manuscript!.id}_coverletter${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
+      console.error("Download failed:", error);
       alert("Download failed");
     } finally {
       setDownloadingCoverLetter(false);
+    }
+  };
+
+  const handleCirculatingUpload = async () => {
+    if (!selectedCirculatingFile || !manuscript) return;
+    setUploadingCirculating(true);
+    const formData = new FormData();
+    formData.append("manuscript_id", manuscript.id.toString());
+    formData.append("circulating_file", selectedCirculatingFile);
+    try {
+      const res = await fetch(`${API}?action=uploadCirculatingFile`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      alert("Circulating file uploaded successfully!");
+      const updated = await fetch(`${API}?action=show&id=${manuscript.id}`).then(r => r.json());
+      setManuscript(updated);
+      setSelectedCirculatingFile(null);
+      if (circulatingFileInputRef.current) circulatingFileInputRef.current.value = "";
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUploadingCirculating(false);
     }
   };
 
@@ -1741,16 +2054,16 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           <strong>Authors:</strong> {manuscript.authors}
         </div>
 
-        {/* File management for new submissions */}
+        {/* Manuscript File Section (download only) */}
         {isNewSubmission && (
           <div style={{ marginBottom: "24px", padding: "16px", background: "#f8f9fa", borderRadius: "12px", border: "1px solid #e9ecef" }}>
             <h4 style={{ margin: "0 0 12px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: "8px" }}>
               <FileText size={18} /> Manuscript File
             </h4>
-            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+            <div>
               {manuscript.filePath ? (
                 <button
-                  onClick={() => handleDownload(manuscript.filePath!)}
+                  onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}`)}
                   disabled={downloadingFile}
                   style={{
                     display: "inline-flex",
@@ -1772,55 +2085,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 </button>
               ) : (
                 <span style={{ color: "#6c757d" }}>No file uploaded yet.</span>
-              )}
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={handleFileSelect}
-                ref={fileInputRef}
-                style={{ display: "none" }}
-                id="manuscript-file-input"
-              />
-              <button
-                onClick={() => document.getElementById("manuscript-file-input")?.click()}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  background: "#0d6efd",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                }}
-              >
-                <Upload size={16} />
-                Choose File
-              </button>
-              {selectedFile && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "0.9rem", color: "#16a34a" }}>{selectedFile.name}</span>
-                  <button
-                    onClick={handleUpload}
-                    disabled={uploadingFile}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: "4px",
-                      border: "none",
-                      background: "#28a745",
-                      color: "#fff",
-                      cursor: uploadingFile ? "not-allowed" : "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      opacity: uploadingFile ? 0.7 : 1,
-                    }}
-                  >
-                    {uploadingFile ? <Spinner /> : <Check size={14} />}
-                    {uploadingFile ? "Uploading..." : "Upload"}
-                  </button>
-                </div>
               )}
             </div>
           </div>
@@ -1857,6 +2121,73 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
+        {/* Circulating Version Section */}
+        <div style={{ marginBottom: "24px", padding: "16px", background: "#f8f9fa", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+          <h4 style={{ margin: "0 0 12px 0", fontSize: "1rem", display: "flex", alignItems: "center", gap: "8px" }}>
+            <FileText size={18} /> Manuscript for Review (Reviewer Version)
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {manuscript.circulatingFilePath && (
+              <div>
+                <div style={{ fontWeight: 500, marginBottom: "8px" }}>Current File:</div>
+                <button
+                  onClick={() => handleDownload(manuscript.circulatingFilePath!, `AFMJ_${manuscript.id}_circulating`)}
+                  disabled={downloadingFile}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 16px",
+                    background: "#e9ecef",
+                    borderRadius: "6px",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {downloadingFile ? <Spinner /> : <Download size={16} />}
+                  Download Current Circulating File
+                </button>
+              </div>
+            )}
+            <div>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                Upload New Circulating Version (optional)
+              </label>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => setSelectedCirculatingFile(e.target.files?.[0] || null)}
+                ref={circulatingFileInputRef}
+                style={{ marginBottom: "8px" }}
+              />
+              {selectedCirculatingFile && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                  <span style={{ fontSize: "0.9rem", color: "#16a34a" }}>{selectedCirculatingFile.name}</span>
+                  <button
+                    onClick={handleCirculatingUpload}
+                    disabled={uploadingCirculating}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "#28a745",
+                      color: "#fff",
+                      cursor: uploadingCirculating ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    {uploadingCirculating ? <Spinner /> : <Check size={14} />}
+                    {uploadingCirculating ? "Uploading..." : "Upload"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Abstract and other sections... (unchanged) */}
         {manuscript.abstract && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Abstract</strong>
@@ -1906,7 +2237,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             </h3>
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button 
-                onClick={() => handleDownload(`/manuscripts/${manuscript.id}.pdf`)}
+                onClick={() => handleDownload(`/manuscripts/${manuscript.id}.pdf`, `AFMJ_${manuscript.id}`)}
                 disabled={downloadingFile}
                 style={{
                   padding: "10px 16px",
@@ -2289,12 +2620,29 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       </div>
                     )}
 
+                    {/* Reviewer attachment (reference document) */}
                     {progress.attachment && (
-                      <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "6px", color: "#0d6efd" }}>
-                        <Paperclip size={16} />
-                        <a href={progress.attachment} target="_blank" rel="noopener noreferrer" style={{ color: "#0d6efd" }}>
-                          {progress.attachment}
-                        </a>
+                      <div style={{ marginTop: "12px" }}>
+                        <div style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "4px", fontWeight: 600 }}>
+                          Reviewer Attachment
+                        </div>
+                        <button
+                          onClick={() => handleDownload(progress.attachment!, `reviewer_attachment_${progress.reviewerId}`)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "8px 12px",
+                            background: "#f1f5f9",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <Download size={14} />
+                          Download Attachment
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2410,7 +2758,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         />
       )}
 
-      {/* Email Editor Modal */}
       {emailModalOpen && (
         <div
           style={{
@@ -2480,6 +2827,36 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
               />
             </div>
 
+            {/* Attachments section */}
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                Attachments (optional)
+              </label>
+              <input
+                type="file"
+                multiple
+                onChange={handleAddAttachment}
+                style={{ marginBottom: "8px" }}
+              />
+              {emailAttachments.length > 0 && (
+                <div style={{ marginTop: "8px", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "8px" }}>
+                  <div style={{ fontWeight: 500, marginBottom: "8px" }}>Selected files:</div>
+                  {emailAttachments.map((file, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.9rem", flex: 1 }}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                      <button
+                        onClick={() => handleRemoveAttachment(idx)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                        title="Remove"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
               <button
                 onClick={() => setEmailModalOpen(false)}
@@ -2524,7 +2901,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
 const ManuscriptCategoryView: FC = () => {
   const { status } = useParams();
   const navigate = useNavigate();
-  const { downloadFile } = useAuth(); // add useAuth
+  const { authFetch } = useAuth();
 
   const readableStatus = deslugify(status || "");
   const [manuscripts, setManuscripts] = useState<Manuscript[]>([]);
@@ -2535,7 +2912,8 @@ const ManuscriptCategoryView: FC = () => {
   const [reviewerTarget, setReviewerTarget] = useState<Manuscript | null>(null);
   const [allReviewers, setAllReviewers] = useState<Reviewer[]>([]);
   const [fileModalManuscript, setFileModalManuscript] = useState<Manuscript | null>(null);
-  const [downloadingManuscriptId, setDownloadingManuscriptId] = useState<number | null>(null); // track which manuscript is downloading
+  const [eicFileModalManuscript, setEicFileModalManuscript] = useState<Manuscript | null>(null);
+  const [downloadingManuscriptId, setDownloadingManuscriptId] = useState<number | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -2551,7 +2929,8 @@ const ManuscriptCategoryView: FC = () => {
         ...m,
         completedReviews: m.completedReviews ?? 0,
         revisedFilePath: m.revisedFilePath ?? null,
-        coverLetterPath: m.coverLetterPath ?? null, // ensure cover letter path is included
+        coverLetterPath: m.coverLetterPath ?? null,
+        circulatingFilePath: m.circulatingFilePath ?? null,
       }));
       setManuscripts(manuscriptsWithCompleted);
       setAllReviewers(reviewers);
@@ -2620,11 +2999,30 @@ const ManuscriptCategoryView: FC = () => {
     return false;
   };
 
-  const handleDownloadManuscript = async (manuscriptId: number, url: string) => {
+  const handleDownloadManuscript = async (manuscriptId: number, filePath: string) => {
     setDownloadingManuscriptId(manuscriptId);
     try {
-      await downloadFile(url);
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      let extension = "";
+      const parts = filePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      const customFileName = `AFMJ_${manuscriptId}${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
+      console.error("Download failed:", error);
       alert("Download failed");
     } finally {
       setDownloadingManuscriptId(null);
@@ -2672,7 +3070,7 @@ const ManuscriptCategoryView: FC = () => {
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Date</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Review Status</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Actions</th>
-                    </tr>
+                   </tr>
                 </thead>
                 <tbody>
                   {currentManuscripts.map((m) => {
@@ -2778,13 +3176,7 @@ const ManuscriptCategoryView: FC = () => {
                               <button
                                 title="Assign Reviewer"
                                 style={{ ...glassBtnStyle, color: "#0d6efd", padding: "6px 8px" }}
-                                onClick={() => {
-                                  if (readableStatus === "Revised") {
-                                    setFileModalManuscript(m);
-                                  } else {
-                                    setReviewerTarget(m);
-                                  }
-                                }}
+                                onClick={() => setEicFileModalManuscript(m)}
                                 onMouseEnter={hoverGlass}
                                 onMouseLeave={leaveGlass}
                               >
@@ -2809,7 +3201,7 @@ const ManuscriptCategoryView: FC = () => {
                             <button
                               title="Open Manuscript"
                               style={{ ...glassBtnStyle, color: "#6c757d", padding: "6px 8px" }}
-                              onClick={() => handleDownloadManuscript(m.id, `/manuscripts/${m.id}.pdf`)}
+                              onClick={() => handleDownloadManuscript(m.id, m.revisedFilePath || m.filePath || `/manuscripts/${m.id}.pdf`)}
                               disabled={downloadingManuscriptId === m.id}
                               onMouseEnter={hoverGlass}
                               onMouseLeave={leaveGlass}
@@ -2895,6 +3287,30 @@ const ManuscriptCategoryView: FC = () => {
             onConfirm={() => {
               setFileModalManuscript(null);
               setReviewerTarget(fileModalManuscript);
+              loadList();
+            }}
+          />
+        )}
+
+        {eicFileModalManuscript && (
+          <EICFileUploadModal
+            manuscript={eicFileModalManuscript}
+            onClose={() => setEicFileModalManuscript(null)}
+            onProceed={() => {
+              setEicFileModalManuscript(null);
+              loadList();
+            }}
+            allReviewers={allReviewers}
+            onAssignReviewers={async (selectedNames) => {
+              const ids = selectedNames
+                .map(name => allReviewers.find(r => r.name === name)?.id)
+                .filter(Boolean) as number[];
+
+              await fetch(`${API}?action=assignReviewers`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ manuscript_id: eicFileModalManuscript.id, reviewers: ids }),
+              });
             }}
           />
         )}

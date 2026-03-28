@@ -63,6 +63,7 @@ const styles = {
     fontSize: "0.9rem",
     fontWeight: 500,
     transition: "background 0.2s",
+    whiteSpace: "nowrap" as const,
   },
   notificationContainer: {
     position: "relative" as const,
@@ -157,15 +158,22 @@ const styles = {
   },
   profile: {
     textAlign: "right" as const,
+    maxWidth: "160px",
   },
   profileName: {
     fontWeight: 600,
     fontSize: "0.9rem",
     color: "#0f172a",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   profileInstitution: {
     fontSize: "0.7rem",
     color: "#6b7280",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   logoutBtn: {
     padding: "6px 10px",
@@ -185,9 +193,66 @@ const styles = {
   },
 };
 
+// Responsive styles
+const responsiveStyles = `
+  @media (max-width: 767px) {
+    .author-topbar {
+      padding: 0 12px !important;
+      height: 56px !important;
+    }
+    .author-topbar .title {
+      display: none !important;  /* Hide main title on mobile */
+    }
+    .author-topbar .subtitle {
+      display: none !important;
+    }
+    .author-topbar .new-submission-btn {
+      padding: 6px 10px !important;
+      font-size: 0.75rem !important;
+    }
+    .author-topbar .profile {
+      max-width: 120px !important;
+    }
+    .author-topbar .profile-name {
+      font-size: 0.8rem !important;
+    }
+    .author-topbar .profile-institution {
+      font-size: 0.65rem !important;
+    }
+    .author-topbar .logout-btn {
+      padding: 4px 8px !important;
+      font-size: 0.7rem !important;
+    }
+    .author-topbar .right {
+      gap: 8px !important;
+    }
+  }
+  @media (max-width: 480px) {
+    .author-topbar .new-submission-btn span {
+      display: none;
+    }
+    .author-topbar .new-submission-btn::before {
+      content: "+";
+      font-size: 1.2rem;
+    }
+    .author-topbar .new-submission-btn {
+      padding: 6px 8px !important;
+    }
+    .author-topbar .profile {
+      max-width: 90px !important;
+    }
+    .author-topbar .profile-name {
+      font-size: 0.75rem !important;
+    }
+    .author-topbar .profile-institution {
+      display: none !important;
+    }
+  }
+`;
+
 const AuthorTopBar = () => {
   const navigate = useNavigate();
-  const { logout, authFetch, sessionId } = useAuth(); // 👈 get authFetch and sessionId
+  const { logout, authFetch, sessionId } = useAuth();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -199,7 +264,6 @@ const AuthorTopBar = () => {
     const fetchData = async () => {
       if (!sessionId) {
         setLoading(false);
-        // Optionally redirect to login
         navigate("/login");
         return;
       }
@@ -212,7 +276,6 @@ const AuthorTopBar = () => {
 
         if (!userRes.ok) {
           if (userRes.status === 401) {
-            // Session expired – logout and redirect
             await logout();
             navigate("/login");
             return;
@@ -257,7 +320,6 @@ const AuthorTopBar = () => {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const handleNotificationClick = async (notif: Notification) => {
-    // Optionally mark as read via API (not implemented in this example)
     setShowNotifications(false);
     if (notif.related_manuscript_id) {
       navigate(`/author/manuscript/${notif.related_manuscript_id}`);
@@ -266,13 +328,12 @@ const AuthorTopBar = () => {
 
   const handleMarkAllAsRead = async () => {
     // Call API to mark all as read (not implemented in this example)
-    // For demo, update local state
     setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
     toast.success("All notifications marked as read");
   };
 
   const handleLogout = async () => {
-    await logout();           // Clear auth state and session
+    await logout();
     navigate("/login");
   };
 
@@ -291,99 +352,104 @@ const AuthorTopBar = () => {
   };
 
   return (
-    <header style={styles.header}>
-      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+    <>
+      <style>{responsiveStyles}</style>
+      <header className="author-topbar" style={styles.header}>
+        <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
 
-      <div style={styles.left}>
-        <h4 style={styles.title}>Journal Author Portal</h4>
-        <small style={styles.subtitle}>Manage your research submissions</small>
-      </div>
+        <div style={styles.left}>
+          <h4 className="title" style={styles.title}>Journal Author Portal</h4>
+          <small className="subtitle" style={styles.subtitle}>Manage your research submissions</small>
+        </div>
 
-      <div style={styles.right}>
-        {/* Quick Submit */}
-        <button
-          onClick={() => navigate("/author/submit")}
-          style={styles.newSubmissionBtn}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-        >
-          + New Submission
-        </button>
-
-        {/* Notifications */}
-        <div style={styles.notificationContainer} ref={dropdownRef}>
-          <div
-            onClick={() => setShowNotifications(!showNotifications)}
-            style={{ display: "flex", alignItems: "center" }}
+        <div className="right" style={styles.right}>
+          {/* Quick Submit */}
+          <button
+            className="new-submission-btn"
+            onClick={() => navigate("/author/submit")}
+            style={styles.newSubmissionBtn}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
           >
-            <Bell size={20} style={styles.bellIcon} />
-            {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
-          </div>
+            <span>+ New Submission</span>
+          </button>
 
-          {showNotifications && (
-            <div style={styles.dropdown}>
-              <div style={styles.dropdownHeader}>
-                <h4 style={styles.dropdownTitle}>Notifications</h4>
-                {unreadCount > 0 && (
-                  <button style={styles.markAllBtn} onClick={handleMarkAllAsRead}>
-                    <CheckCheck size={14} />
-                    Mark all read
-                  </button>
+          {/* Notifications */}
+          <div style={styles.notificationContainer} ref={dropdownRef}>
+            <div
+              onClick={() => setShowNotifications(!showNotifications)}
+              style={{ display: "flex", alignItems: "center" }}
+            >
+              <Bell size={20} style={styles.bellIcon} />
+              {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+            </div>
+
+            {showNotifications && (
+              <div style={styles.dropdown}>
+                <div style={styles.dropdownHeader}>
+                  <h4 style={styles.dropdownTitle}>Notifications</h4>
+                  {unreadCount > 0 && (
+                    <button style={styles.markAllBtn} onClick={handleMarkAllAsRead}>
+                      <CheckCheck size={14} />
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                {notifications.length === 0 ? (
+                  <div style={styles.emptyState}>No notifications</div>
+                ) : (
+                  <ul style={styles.notificationList}>
+                    {notifications.map((notif) => (
+                      <li
+                        key={notif.id}
+                        style={styles.notificationItem(notif.is_read)}
+                        onClick={() => handleNotificationClick(notif)}
+                      >
+                        <div style={styles.notificationTitle}>{notif.title}</div>
+                        {notif.description && (
+                          <div style={styles.notificationDesc}>{notif.description}</div>
+                        )}
+                        <div style={styles.notificationMeta}>
+                          <span>{formatTime(notif.created_at)}</span>
+                          {notif.related_manuscript_id && (
+                            <span style={styles.link}>
+                              <ExternalLink size={12} />
+                              View
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-              {notifications.length === 0 ? (
-                <div style={styles.emptyState}>No notifications</div>
-              ) : (
-                <ul style={styles.notificationList}>
-                  {notifications.map((notif) => (
-                    <li
-                      key={notif.id}
-                      style={styles.notificationItem(notif.is_read)}
-                      onClick={() => handleNotificationClick(notif)}
-                    >
-                      <div style={styles.notificationTitle}>{notif.title}</div>
-                      {notif.description && (
-                        <div style={styles.notificationDesc}>{notif.description}</div>
-                      )}
-                      <div style={styles.notificationMeta}>
-                        <span>{formatTime(notif.created_at)}</span>
-                        {notif.related_manuscript_id && (
-                          <span style={styles.link}>
-                            <ExternalLink size={12} />
-                            View
-                          </span>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Profile */}
-        <div style={styles.profile}>
-          <strong style={styles.profileName}>
-            {user?.name || (loading ? "Loading..." : "Author")}
-          </strong>
-          <br />
-          <small style={styles.profileInstitution}>
-            {user?.institution || (loading ? "" : "Author")}
-          </small>
-        </div>
+          {/* Profile */}
+          <div className="profile" style={styles.profile}>
+            <strong className="profile-name" style={styles.profileName}>
+              {user?.name || (loading ? "Loading..." : "Author")}
+            </strong>
+            <br />
+            <small className="profile-institution" style={styles.profileInstitution}>
+              {user?.institution || (loading ? "" : "Author")}
+            </small>
+          </div>
 
-        {/* Logout */}
-        <button
-          style={styles.logoutBtn}
-          onClick={handleLogout}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-        >
-          Logout
-        </button>
-      </div>
-    </header>
+          {/* Logout */}
+          <button
+            className="logout-btn"
+            style={styles.logoutBtn}
+            onClick={handleLogout}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+    </>
   );
 };
 

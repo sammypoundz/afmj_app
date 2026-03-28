@@ -3,7 +3,6 @@ import { User, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
-// Styles object for consistency
 const styles = {
   topbar: {
     display: "flex",
@@ -21,18 +20,24 @@ const styles = {
   left: {
     display: "flex",
     alignItems: "center",
+    flex: 1, // allow title to shrink
+    minWidth: 0, // prevent overflow
   },
   title: {
     fontSize: "1.25rem",
     fontWeight: 600,
     color: "#0f172a",
     margin: 0,
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   right: {
     position: "relative" as const,
     display: "flex",
     alignItems: "center",
     gap: "12px",
+    flexShrink: 0, // prevent shrinking on the right side
   },
   userMenu: {
     display: "flex",
@@ -44,15 +49,20 @@ const styles = {
     cursor: "pointer",
     transition: "background 0.2s",
     border: "1px solid #e2e8f0",
+    maxWidth: "200px", // limit width
   },
   userName: {
     fontWeight: 500,
     color: "#0f172a",
     fontSize: "0.95rem",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   chevron: {
     color: "#64748b",
     transition: "transform 0.2s",
+    flexShrink: 0,
   },
   chevronOpen: {
     transform: "rotate(180deg)",
@@ -96,6 +106,7 @@ const styles = {
     borderRadius: "6px",
     color: "#6b7280",
     transition: "all 0.2s",
+    flexShrink: 0,
   },
 };
 
@@ -125,62 +136,95 @@ const ReviewerTopBar = () => {
     navigate("/login");
   };
 
-  // If user is not loaded yet, show placeholder
   const displayName = user?.name || user?.email || "Reviewer";
 
+  const responsiveStyles = `
+    @media (max-width: 767px) {
+      .reviewer-topbar {
+        padding-left: 56px !important;
+      }
+      .reviewer-topbar .title {
+        font-size: 1rem;
+      }
+      .reviewer-topbar .user-name {
+        font-size: 0.85rem;
+      }
+      .reviewer-topbar .logout-text {
+        display: none;
+      }
+      .reviewer-topbar .user-menu {
+        max-width: 160px;
+      }
+    }
+    @media (min-width: 768px) {
+      .reviewer-topbar .logout-text {
+        display: inline;
+      }
+    }
+  `;
+
   return (
-    <header style={styles.topbar}>
-      <div style={styles.left}>
-        <h3 style={styles.title}>Reviewer Workspace</h3>
-      </div>
-
-      <div style={styles.right}>
-        {/* User menu with dropdown for profile */}
-        <div style={styles.right} ref={dropdownRef}>
-          <div
-            style={styles.userMenu}
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
-          >
-            <span style={styles.userName}>{displayName}</span>
-            <ChevronDown
-              size={16}
-              style={{
-                ...styles.chevron,
-                ...(dropdownOpen ? styles.chevronOpen : {}),
-              }}
-            />
-          </div>
-
-          {dropdownOpen && (
-            <div style={styles.dropdown}>
-              <button
-                style={styles.dropdownItem}
-                onClick={handleProfile}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-              >
-                <User size={16} style={styles.icon} />
-                <span>Profile</span>
-              </button>
-              {/* Removed logout from dropdown – now separate button */}
-            </div>
-          )}
+    <>
+      <style>{responsiveStyles}</style>
+      <header className="reviewer-topbar" style={styles.topbar}>
+        <div style={styles.left}>
+          <h3 className="title" style={styles.title}>
+            Reviewer Workspace
+          </h3>
         </div>
 
-        {/* Separate logout button */}
-        <button
-          style={styles.logoutBtn}
-          onClick={handleLogout}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <LogOut size={18} />
-          <span>Logout</span>
-        </button>
-      </div>
-    </header>
+        <div style={styles.right}>
+          {/* User menu with dropdown */}
+          <div ref={dropdownRef} style={{ position: "relative" }}>
+            <div
+              className="user-menu"
+              style={styles.userMenu}
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+            >
+              <span className="user-name" style={styles.userName}>
+                {displayName}
+              </span>
+              <ChevronDown
+                size={16}
+                style={{
+                  ...styles.chevron,
+                  ...(dropdownOpen ? styles.chevronOpen : {}),
+                }}
+              />
+            </div>
+
+            {dropdownOpen && (
+              <div style={styles.dropdown}>
+                <button
+                  style={styles.dropdownItem}
+                  onClick={handleProfile}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <User size={16} style={styles.icon} />
+                  <span>Profile</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Logout button */}
+          <button
+            style={styles.logoutBtn}
+            onClick={handleLogout}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <LogOut size={18} />
+            <span className="logout-text" style={{ marginLeft: "4px" }}>
+              Logout
+            </span>
+          </button>
+        </div>
+      </header>
+    </>
   );
 };
 

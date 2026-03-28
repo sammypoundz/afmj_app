@@ -1,8 +1,12 @@
 import type { FC } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bell, Menu } from "lucide-react";
 import { eicMenu } from "./EICSidebar";
+
+// Logo URLs (same as reviewer/author)
+const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
+const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
 // Mapping from menu label to API response key
 const labelToApiKey: Record<string, string> = {
@@ -34,27 +38,22 @@ const attentionLabels = new Set([
 
 const API_BASE = "https://afmjonline.com/api/EICcountersAPI.php";
 
-// Local menu definition – based on eicMenu but with "Notifications" inserted in System section
+// Build menu with Notifications added (as before)
 const buildMenu = () => {
-  // Deep copy eicMenu to avoid mutating the imported constant
   const menu = eicMenu.map(section => ({
     ...section,
     items: [...section.items]
   }));
 
-  // Find System section
   const systemSection = menu.find(s => s.section === "System");
   if (systemSection) {
-    // Find index of Analytics (assuming it exists)
     const analyticsIndex = systemSection.items.findIndex(item => item.label === "Analytics");
     if (analyticsIndex !== -1) {
-      // Insert Notifications right before Analytics
       systemSection.items.splice(analyticsIndex, 0, {
         label: "Notifications",
         icon: Bell
       });
     } else {
-      // If Analytics not found, just push at the end
       systemSection.items.push({ label: "Notifications", icon: Bell });
     }
   }
@@ -63,9 +62,11 @@ const buildMenu = () => {
 
 const Sidebar: FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const navigate = useNavigate();
   const location = useLocation();
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   const menu = buildMenu(); // build once per render
 
@@ -89,135 +90,296 @@ const Sidebar: FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [mobileOpen]);
+
+  const handleNavigation = (path: string) => {
+    if (path !== "#") navigate(path);
+    if (window.innerWidth < 768) setMobileOpen(false);
+  };
+
+  // Responsive CSS
+  const responsiveStyles = `
+    @media (max-width: 767px) {
+      .eic-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 280px;
+        background: #fff;
+        box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+      }
+      .eic-sidebar.mobile-open {
+        transform: translateX(0);
+      }
+      .eic-sidebar.collapsed {
+        transform: translateX(-100%);
+      }
+      .mobile-menu-btn {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1001;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .sidebar-header {
+        padding: 1rem;
+      }
+      .collapse-btn {
+        display: none;
+      }
+    }
+    @media (min-width: 768px) {
+      .mobile-menu-btn {
+        display: none;
+      }
+      .eic-sidebar {
+        transition: width 0.2s ease;
+      }
+      .eic-sidebar.collapsed {
+        width: 80px;
+      }
+      .eic-sidebar:not(.collapsed) {
+        width: 280px;
+      }
+      .sidebar-header {
+        padding: 1rem;
+      }
+      .collapse-btn {
+        background: #f1f5f9;
+        border: none;
+        border-radius: 6px;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+      .collapse-btn:hover {
+        background: #e2e8f0;
+      }
+    }
+  `;
+
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
-      {/* Top / Logo */}
-      <div className="sidebar-header">
-        {!collapsed && <h2 className="logo">AMJ • EIC</h2>}
+    <>
+      <style>{responsiveStyles}</style>
 
-        <button
-          className="collapse-btn"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
-      </div>
+      {/* Mobile menu button */}
+      <button
+        className="mobile-menu-btn"
+        onClick={() => setMobileOpen(!mobileOpen)}
+        aria-label="Toggle menu"
+      >
+        <Menu size={20} />
+      </button>
 
-      {/* Menu */}
-      {menu.map((group) => (
-        <div key={group.section} className="menu-group">
-          {/* Section title – now bolder */}
-          {!collapsed && (
-            <p
-              className="menu-title"
-              style={{
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                letterSpacing: "0.3px",
-              }}
-            >
-              {group.section}
-            </p>
-          )}
+      <aside
+        ref={sidebarRef}
+        className={`eic-sidebar ${collapsed ? "collapsed" : ""} ${
+          mobileOpen ? "mobile-open" : ""
+        }`}
+        style={{
+          background: "#fff",
+          borderRight: "1px solid #e2e8f0",
+          minHeight: "100vh",
+          overflowX: "hidden",
+          transition: "width 0.2s ease, transform 0.3s ease",
+        }}
+      >
+        {/* Header with logo and collapse button */}
+        <div className="sidebar-header">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "space-between",
+              width: "100%",
+            }}
+          >
+            {!collapsed ? (
+              <>
+                <img
+                  src={LOGO_URL}
+                  alt="AFMJ Logo"
+                  style={{
+                    maxWidth: "180px",
+                    width: "100%",
+                    height: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+                <button
+                  className="collapse-btn"
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Collapse sidebar"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                <img
+                  src={FAVICON_URL}
+                  alt="AFMJ Icon"
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    objectFit: "contain",
+                    borderRadius: "4px",
+                  }}
+                />
+                <button
+                  className="collapse-btn"
+                  onClick={() => setCollapsed(false)}
+                  aria-label="Expand sidebar"
+                  style={{ marginLeft: "8px" }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
-          {group.items.map((item) => {
-            const Icon = item.icon;
-
-            let path = "#";
-
-            /* Dashboard */
-            if (item.label === "Dashboard") path = "/eic/dashboard";
-
-            /* Manuscripts */
-            else if (group.section === "Manuscripts") {
-              const status = item.label.toLowerCase().replace(/\s+/g, "-");
-              path = `/eic/manuscripts/${status}`;
-            }
-
-            /* Publications */
-            else if (group.section === "Publications") {
-              if (item.label === "Published") path = "/eic/publications/published";
-              else if (item.label === "Publication Decision") path = "/eic/publications/decision";
-              else if (item.label === "Journal Issues") path = "/eic/publications/issues";
-            }
-
-            /* Users */
-            else if (group.section === "Users") {
-              if (item.label === "Reviewers") path = "/eic/users/reviewers";
-              else if (item.label === "Editors") path = "/eic/users/editors";
-              else if (item.label === "Authors") path = "/eic/users/authors";
-            }
-
-            /* System */
-            else if (group.section === "System") {
-              if (item.label === "Analytics") path = "/eic/analytics";
-              else if (item.label === "Profile & Logs") path = "/eic/profile";
-              else if (item.label === "Notifications") path = "/eic/notifications";
-              else if (item.label === "Settings") path = "/eic/settings";
-            }
-
-            // Get count from API response (only for labels that have an API key)
-            const apiKey = labelToApiKey[item.label];
-            const count = apiKey ? (counts[apiKey] || 0) : 0;
-
-            // Determine if this item should show a badge
-            const showBadge = attentionLabels.has(item.label) && count > 0;
-
-            // Check active state
-            const isActive = location.pathname === path;
-
-            return (
-              <div
-                key={item.label}
-                className="menu-item"
-                onClick={() => {
-                  if (path !== "#") navigate(path);
-                }}
+        {/* Menu */}
+        {menu.map((group) => (
+          <div key={group.section} className="menu-group">
+            {!collapsed && (
+              <p
+                className="menu-title"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: collapsed ? "center" : "space-between",
-                  cursor: "pointer",
-                  background: isActive ? "#dcfce7" : "transparent",
-                  color: isActive ? "#16a34a" : "#111827",
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  transition: "background 0.2s, color 0.2s",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  letterSpacing: "0.3px",
+                  color: "#64748b",
+                  margin: "16px 8px 8px 12px",
                 }}
               >
+                {group.section}
+              </p>
+            )}
+
+            {group.items.map((item) => {
+              const Icon = item.icon;
+
+              let path = "#";
+
+              /* Dashboard */
+              if (item.label === "Dashboard") path = "/eic/dashboard";
+
+              /* Manuscripts */
+              else if (group.section === "Manuscripts") {
+                const status = item.label.toLowerCase().replace(/\s+/g, "-");
+                path = `/eic/manuscripts/${status}`;
+              }
+
+              /* Publications */
+              else if (group.section === "Publications") {
+                if (item.label === "Published") path = "/eic/publications/published";
+                else if (item.label === "Publication Decision") path = "/eic/publications/decision";
+                else if (item.label === "Journal Issues") path = "/eic/publications/issues";
+              }
+
+              /* Users */
+              else if (group.section === "Users") {
+                if (item.label === "Reviewers") path = "/eic/users/reviewers";
+                else if (item.label === "Editors") path = "/eic/users/editors";
+                else if (item.label === "Authors") path = "/eic/users/authors";
+              }
+
+              /* System */
+              else if (group.section === "System") {
+                if (item.label === "Analytics") path = "/eic/analytics";
+                else if (item.label === "Profile & Logs") path = "/eic/profile";
+                else if (item.label === "Notifications") path = "/eic/notifications";
+                else if (item.label === "Settings") path = "/eic/settings";
+              }
+
+              // Get count from API response
+              const apiKey = labelToApiKey[item.label];
+              const count = apiKey ? (counts[apiKey] || 0) : 0;
+
+              // Show badge for attention items
+              const showBadge = attentionLabels.has(item.label) && count > 0;
+
+              // Active state
+              const isActive = location.pathname === path;
+
+              return (
                 <div
+                  key={item.label}
+                  className="menu-item"
+                  onClick={() => handleNavigation(path)}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "10px",
+                    justifyContent: collapsed ? "center" : "space-between",
+                    cursor: "pointer",
+                    background: isActive ? "#dcfce7" : "transparent",
+                    color: isActive ? "#16a34a" : "#111827",
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    margin: "2px 8px",
+                    transition: "background 0.2s, color 0.2s",
                   }}
                 >
-                  <Icon size={20} />
-                  {!collapsed && <span>{item.label}</span>}
-                </div>
-
-                {!collapsed && showBadge && (
-                  <span
+                  <div
                     style={{
-                      background: "#dc2626",
-                      color: "#fff",
-                      fontSize: "11px",
-                      padding: "2px 7px",
-                      borderRadius: "999px",
-                      minWidth: "20px",
-                      textAlign: "center",
-                      lineHeight: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
                     }}
                   >
-                    {count}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </aside>
+                    <Icon size={20} />
+                    {!collapsed && <span>{item.label}</span>}
+                  </div>
+
+                  {!collapsed && showBadge && (
+                    <span
+                      style={{
+                        background: "#dc2626",
+                        color: "#fff",
+                        fontSize: "11px",
+                        padding: "2px 7px",
+                        borderRadius: "999px",
+                        minWidth: "20px",
+                        textAlign: "center",
+                        lineHeight: "16px",
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </aside>
+    </>
   );
 };
 

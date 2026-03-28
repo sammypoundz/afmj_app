@@ -14,12 +14,13 @@ import {
   BarChart,
   FlaskConical,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "/api/reviewerApi.php";
 
 interface ActiveReview {
   id: number;
+  manuscript_id: number;
   manuscriptId: string;
   title: string;
   dueDate: string;
@@ -40,7 +41,6 @@ interface ManuscriptPreview {
   file_path?: string;
 }
 
-// Spinner component (green)
 const Spinner = ({ size = 20, color = "#16a34a" }) => (
   <span
     style={{
@@ -55,7 +55,6 @@ const Spinner = ({ size = 20, color = "#16a34a" }) => (
   />
 );
 
-// Global keyframes and responsive utility class
 const GlobalStyles = () => (
   <style>{`
     @keyframes spin {
@@ -70,6 +69,11 @@ const GlobalStyles = () => (
   `}</style>
 );
 
+const formatManuscriptId = (manuscriptId: number, submissionYear?: number) => {
+  const year = submissionYear || new Date().getFullYear();
+  return `AFMJ-${year}-${manuscriptId}`;
+};
+
 const ReviewerActiveReviews = () => {
   const [reviews, setReviews] = useState<ActiveReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,12 +81,12 @@ const ReviewerActiveReviews = () => {
   const [selectedReview, setSelectedReview] = useState<ActiveReview | null>(null);
   const [previewData, setPreviewData] = useState<ManuscriptPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState(false);
   const navigate = useNavigate();
-  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
+  const { authFetch, sessionId } = useAuth(); // removed downloadFile
 
   const fetchActiveReviews = async () => {
     if (!sessionId) {
-      // No session ID – likely not authenticated; redirect or handle gracefully
       navigate("/login");
       return;
     }
@@ -107,8 +111,7 @@ const ReviewerActiveReviews = () => {
 
   useEffect(() => {
     fetchActiveReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]); // refetch if sessionId changes (e.g., after login)
+  }, [sessionId]);
 
   const openPreview = async (review: ActiveReview) => {
     setSelectedReview(review);
@@ -149,6 +152,46 @@ const ReviewerActiveReviews = () => {
     });
   };
 
+  // ✅ Updated download function with custom filename
+  const handleDownload = async (filePath: string) => {
+    if (!selectedReview) return;
+
+    setDownloadingFile(true);
+    try {
+      // Extract original file extension
+      const extension = filePath.split('.').pop() || '';
+      // Build custom filename: AFMJ_<manuscript_id>.<extension>
+      const manuscriptId = selectedReview.manuscript_id || parseInt(selectedReview.manuscriptId);
+      const customFileName = `AFMJ_${manuscriptId}${extension ? '.' + extension : ''}`;
+
+      // Fetch the file with authentication
+      const response = await authFetch(`https://afmjonline.com/api/download.php?file=${encodeURIComponent(filePath)}`);
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      // Create a temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;  // 👈 forces the custom name
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download the file. Please try again.");
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
   const goBack = () => navigate(-1);
 
   if (loading) {
@@ -166,7 +209,6 @@ const ReviewerActiveReviews = () => {
     <>
       <GlobalStyles />
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px 16px" }}>
-        {/* Header with larger back button */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px" }}>
           <button
             onClick={goBack}
@@ -194,7 +236,6 @@ const ReviewerActiveReviews = () => {
           </h1>
         </div>
 
-        {/* Reviews list */}
         {reviews.length === 0 ? (
           <div
             style={{
@@ -244,7 +285,9 @@ const ReviewerActiveReviews = () => {
                         border: "1px solid #16a34a20",
                       }}
                     >
-                      {review.manuscriptId}
+                      {review.manuscript_id
+                        ? formatManuscriptId(review.manuscript_id)
+                        : review.manuscriptId}
                     </span>
                   </div>
                   <h3 style={{ fontSize: "1.2rem", fontWeight: 600, color: "#0f172a", margin: "4px 0" }}>
@@ -285,7 +328,7 @@ const ReviewerActiveReviews = () => {
         )}
       </div>
 
-      {/* Preview Modal with green gradient */}
+      {/* Preview Modal */}
       {modalOpen && selectedReview && (
         <div
           style={{
@@ -314,7 +357,6 @@ const ReviewerActiveReviews = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header with green gradient */}
             <div
               style={{
                 background: "linear-gradient(135deg, #16a34a, #0d9488)",
@@ -338,7 +380,6 @@ const ReviewerActiveReviews = () => {
               </button>
             </div>
 
-            {/* Modal Content */}
             <div style={{ padding: "24px", overflowY: "auto" }}>
               {previewLoading ? (
                 <div style={{ textAlign: "center", padding: "40px" }}>
@@ -347,7 +388,6 @@ const ReviewerActiveReviews = () => {
                 </div>
               ) : previewData ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                  {/* Meta information card */}
                   <div
                     style={{
                       background: "#f9fafb",
@@ -363,7 +403,9 @@ const ReviewerActiveReviews = () => {
                         Manuscript ID
                       </div>
                       <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#16a34a" }}>
-                        {previewData.slug}
+                        {selectedReview.manuscript_id
+                          ? formatManuscriptId(selectedReview.manuscript_id)
+                          : previewData.slug}
                       </div>
                     </div>
                     <div>
@@ -381,13 +423,12 @@ const ReviewerActiveReviews = () => {
                     </div>
                   </div>
 
-                  {/* Download button (if file exists) */}
+                  {/* Download button */}
                   {previewData.file_path && (
                     <div style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
-                      <a
-                        href={previewData.file_path}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => handleDownload(previewData.file_path!)}
+                        disabled={downloadingFile}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -401,22 +442,23 @@ const ReviewerActiveReviews = () => {
                           fontWeight: 500,
                           border: "1px solid #e5e7eb",
                           transition: "background 0.2s",
+                          cursor: downloadingFile ? "not-allowed" : "pointer",
+                          opacity: downloadingFile ? 0.6 : 1,
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#e5e7eb")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                        onMouseEnter={(e) => !downloadingFile && (e.currentTarget.style.background = "#e5e7eb")}
+                        onMouseLeave={(e) => !downloadingFile && (e.currentTarget.style.background = "#f3f4f6")}
                       >
-                        <Download size={18} />
-                        Download Manuscript
-                      </a>
+                        {downloadingFile ? <Spinner size={16} /> : <Download size={18} />}
+                        {downloadingFile ? "Downloading..." : "Download Manuscript"}
+                      </button>
                     </div>
                   )}
 
-                  {/* Title */}
+                  {/* Rest of the manuscript details unchanged */}
                   <h4 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#111827", margin: "8px 0 4px" }}>
                     {previewData.title}
                   </h4>
 
-                  {/* Abstract */}
                   {previewData.abstract && (
                     <div style={{ borderLeft: "4px solid #16a34a", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -427,7 +469,6 @@ const ReviewerActiveReviews = () => {
                     </div>
                   )}
 
-                  {/* Background */}
                   {previewData.background && (
                     <div style={{ borderLeft: "4px solid #0d9488", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -438,7 +479,6 @@ const ReviewerActiveReviews = () => {
                     </div>
                   )}
 
-                  {/* Objective */}
                   {previewData.objective && (
                     <div style={{ borderLeft: "4px solid #7c3aed", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -449,7 +489,6 @@ const ReviewerActiveReviews = () => {
                     </div>
                   )}
 
-                  {/* Methods */}
                   {previewData.methods && (
                     <div style={{ borderLeft: "4px solid #f97316", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -460,7 +499,6 @@ const ReviewerActiveReviews = () => {
                     </div>
                   )}
 
-                  {/* Results */}
                   {previewData.results && (
                     <div style={{ borderLeft: "4px solid #a855f7", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -471,7 +509,6 @@ const ReviewerActiveReviews = () => {
                     </div>
                   )}
 
-                  {/* Conclusion */}
                   {previewData.conclusion && (
                     <div style={{ borderLeft: "4px solid #d97706", paddingLeft: "16px", marginTop: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -487,7 +524,6 @@ const ReviewerActiveReviews = () => {
               )}
             </div>
 
-            {/* Modal Footer */}
             <div
               style={{
                 borderTop: "1px solid #e5e7eb",
