@@ -2151,7 +2151,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
             )}
             <div>
               <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                Upload New Circulating Version (optional)
+                Upload New Circulating Version
               </label>
               <input
                 type="file"
