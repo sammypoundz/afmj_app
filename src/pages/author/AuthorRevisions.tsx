@@ -12,11 +12,14 @@ import {
   AlertCircle,
   MessageSquare,
   CheckCircle,
+  Paperclip,
+  Download,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
+const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
 
 interface RevisionEntry {
   entry_id: number;
@@ -37,6 +40,13 @@ interface ManuscriptRevision {
     status: string;
   };
   revisionEntries: RevisionEntry[];
+}
+
+interface EmailAttachment {
+  id: number;
+  file_path: string;
+  decision_type: string;
+  created_at: string;
 }
 
 const styles = {
@@ -118,11 +128,11 @@ const styles = {
   },
   statusBadge: (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
-      "submitted": { bg: "#e2e8f0", text: "#475569" },
-      "under_review": { bg: "#fef9c3", text: "#eab308" },
-      "accepted": { bg: "#dcfce7", text: "#16a34a" },
-      "rejected": { bg: "#fee2e2", text: "#dc2626" },
-      "published": { bg: "#dcfce7", text: "#16a34a" },
+      submitted: { bg: "#e2e8f0", text: "#475569" },
+      under_review: { bg: "#fef9c3", text: "#eab308" },
+      accepted: { bg: "#dcfce7", text: "#16a34a" },
+      rejected: { bg: "#fee2e2", text: "#dc2626" },
+      published: { bg: "#dcfce7", text: "#16a34a" },
     };
     const color = colors[status] || { bg: "#e2e8f0", text: "#475569" };
     return {
@@ -272,6 +282,12 @@ const styles = {
     textAlign: "center" as const,
     color: "#16a34a",
   },
+  attachmentsSection: {
+    marginTop: "20px",
+    padding: "12px",
+    background: "#f9fafb",
+    borderRadius: "8px",
+  },
 };
 
 const entryStatusBadge = (addressed: boolean) => ({
@@ -296,6 +312,8 @@ const AuthorRevisions = () => {
   }>({});
   const [responseMessages, setResponseMessages] = useState<{ [key: number]: string }>({});
   const [submitting, setSubmitting] = useState<{ [key: number]: boolean }>({});
+  const [attachments, setAttachments] = useState<{ [manuscriptId: number]: EmailAttachment[] }>({});
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionId) {
@@ -332,8 +350,25 @@ const AuthorRevisions = () => {
     }
   };
 
+  const fetchAttachments = async (manuscriptId: number) => {
+    if (attachments[manuscriptId]) return; // already fetched
+    try {
+      const res = await authFetch(`${API_BASE}?action=getEmailAttachments&manuscript_id=${manuscriptId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAttachments((prev) => ({ ...prev, [manuscriptId]: data }));
+      }
+    } catch (err) {
+      console.error("Failed to fetch attachments:", err);
+    }
+  };
+
   const toggleExpand = (manuscriptId: number) => {
-    setExpandedManuscriptId(expandedManuscriptId === manuscriptId ? null : manuscriptId);
+    const newExpanded = expandedManuscriptId === manuscriptId ? null : manuscriptId;
+    setExpandedManuscriptId(newExpanded);
+    if (newExpanded) {
+      fetchAttachments(manuscriptId);
+    }
   };
 
   const handleFileChange = (
@@ -362,6 +397,31 @@ const AuthorRevisions = () => {
 
   const handleResponseMessageChange = (manuscriptId: number, message: string) => {
     setResponseMessages((prev) => ({ ...prev, [manuscriptId]: message }));
+  };
+
+  const handleDownload = async (filePath: string) => {
+    setDownloadingFile(filePath);
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      const parts = filePath.split('/');
+      const fileName = decodeURIComponent(parts[parts.length - 1]);
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Download failed. Please try again.");
+    } finally {
+      setDownloadingFile(null);
+    }
   };
 
   const handleSubmit = async (manuscriptId: number) => {
@@ -421,6 +481,17 @@ const AuthorRevisions = () => {
 
   const goBack = () => navigate(-1);
 
+  // Spinner style
+  const spinnerStyle = {
+    width: 14,
+    height: 14,
+    border: "2px solid currentColor",
+    borderTop: "2px solid transparent",
+    borderRadius: "50%",
+    display: "inline-block",
+    animation: "spin 0.7s linear infinite",
+  };
+
   if (loading) {
     return (
       <div style={styles.page}>
@@ -453,6 +524,9 @@ const AuthorRevisions = () => {
 
   return (
     <div style={styles.page}>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
       <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
 
       <div style={styles.header}>
@@ -481,6 +555,7 @@ const AuthorRevisions = () => {
           const isSubmitting = submitting[man.id] || false;
           const hasPending = item.revisionEntries.some(entry => !entry.addressed);
           const pendingCount = item.revisionEntries.filter(entry => !entry.addressed).length;
+          const manuscriptAttachments = attachments[man.id] || [];
 
           return (
             <div key={man.id} style={styles.card}>
@@ -511,6 +586,53 @@ const AuthorRevisions = () => {
               {/* Expanded content */}
               {isExpanded && (
                 <div style={styles.commentsSection}>
+                  {/* Editor Attachments (if any) */}
+                  {manuscriptAttachments.length > 0 && (
+                    <div style={styles.attachmentsSection}>
+                      <h4 style={{ marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Paperclip size={16} /> Editor Attachments
+                      </h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {manuscriptAttachments.map((att, idx) => (
+                          <div key={att.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0", paddingBottom: "6px" }}>
+                            <div>
+                              <strong>Attachment {idx + 1}</strong>
+                              <span style={{ fontSize: "0.8rem", color: "#6b7280", marginLeft: "8px" }}>
+                                ({att.decision_type === 'reject' ? 'Rejection' : att.decision_type === 'revision' ? 'Revision Request' : 'Decision'})
+                              </span>
+                              <br />
+                              <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>
+                                {new Date(att.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleDownload(att.file_path)}
+                              disabled={downloadingFile === att.file_path}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "4px 10px",
+                                background: "#e9ecef",
+                                borderRadius: "6px",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                              }}
+                            >
+                              {downloadingFile === att.file_path ? (
+                                <span style={spinnerStyle} />
+                              ) : (
+                                <Download size={14} />
+                              )}
+                              Download
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Revision entries */}
                   {item.revisionEntries.map((entry) => (
                     <div key={entry.entry_id} style={styles.commentCard}>

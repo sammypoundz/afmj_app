@@ -53,6 +53,8 @@ const ReviewSubmissionPage = () => {
   const [confidentialComments, setConfidentialComments] = useState("");
   const [recommendation, setRecommendation] = useState("");
 
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+
   useEffect(() => {
     const loadData = async () => {
       if (!id) {
@@ -101,6 +103,14 @@ const ReviewSubmissionPage = () => {
 
   const handleScoreChange = (field: string, value: number) => {
     setScores({ ...scores, [field]: value });
+    // Clear validation error for this field if it exists
+    if (value > 0 && validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,11 +119,27 @@ const ReviewSubmissionPage = () => {
     }
   };
 
+  const validateForm = (): boolean => {
+    const errors: { [key: string]: string } = {};
+
+    // Check all scores > 0
+    if (scores.originality === 0) errors.originality = "Originality score is required";
+    if (scores.methodology === 0) errors.methodology = "Methodology score is required";
+    if (scores.clarity === 0) errors.clarity = "Clarity score is required";
+    if (scores.relevance === 0) errors.relevance = "Relevance score is required";
+
+    if (!recommendation) errors.recommendation = "Please select a recommendation";
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async () => {
-    if (!recommendation) {
-      toast.error("Please select a recommendation");
+    if (!validateForm()) {
+      toast.error("Please fill in all required fields");
       return;
     }
+
     if (!reviewId) {
       toast.error("No review ID available – cannot submit");
       return;
@@ -176,6 +202,10 @@ const ReviewSubmissionPage = () => {
       </>
     );
   }
+
+  // Determine if all required fields are filled (for UI – disable submit button)
+  const allScoresFilled = Object.values(scores).every(v => v > 0);
+  const isFormValid = allScoresFilled && recommendation !== "";
 
   return (
     <>
@@ -248,27 +278,31 @@ const ReviewSubmissionPage = () => {
         >
           <h3 style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: 0, marginBottom: "20px", color: "#0f172a" }}>
             <Star size={20} color="#16a34a" />
-            Evaluation Criteria
+            Evaluation Criteria <span style={{ color: "#ef4444", fontSize: "0.9rem" }}>(all required)</span>
           </h3>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
             {Object.keys(scores).map((key) => (
               <div key={key} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontWeight: 500, color: "#334155", textTransform: "capitalize" }}>{key}</label>
+                <label style={{ fontWeight: 500, color: "#334155", textTransform: "capitalize" }}>
+                  {key} <span style={{ color: "#ef4444" }}>*</span>
+                </label>
                 <select
                   value={scores[key as keyof typeof scores]}
                   onChange={(e) => handleScoreChange(key, Number(e.target.value))}
                   style={{
                     padding: "10px 12px",
                     borderRadius: "12px",
-                    border: "1px solid #e2e8f0",
+                    border: validationErrors[key] ? "1px solid #ef4444" : "1px solid #e2e8f0",
                     background: "#fff",
                     fontSize: "0.95rem",
                     outline: "none",
                     transition: "border 0.2s",
                   }}
                   onFocus={(e) => (e.target.style.borderColor = "#16a34a")}
-                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                  onBlur={(e) => {
+                    if (!validationErrors[key]) e.target.style.borderColor = "#e2e8f0";
+                  }}
                 >
                   <option value={0}>Select score</option>
                   <option value={1}>1 - Poor</option>
@@ -277,6 +311,11 @@ const ReviewSubmissionPage = () => {
                   <option value={4}>4 - Very Good</option>
                   <option value={5}>5 - Excellent</option>
                 </select>
+                {validationErrors[key] && (
+                  <span style={{ fontSize: "0.75rem", color: "#ef4444", marginTop: "2px" }}>
+                    {validationErrors[key]}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -397,23 +436,34 @@ const ReviewSubmissionPage = () => {
         >
           <h3 style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: 0, marginBottom: "16px", color: "#0f172a" }}>
             <CheckCircle size={20} color="#16a34a" />
-            Final Recommendation
+            Final Recommendation <span style={{ color: "#ef4444", fontSize: "0.9rem" }}>*</span>
           </h3>
           <select
             value={recommendation}
-            onChange={(e) => setRecommendation(e.target.value)}
+            onChange={(e) => {
+              setRecommendation(e.target.value);
+              if (e.target.value && validationErrors.recommendation) {
+                setValidationErrors(prev => {
+                  const newErrors = { ...prev };
+                  delete newErrors.recommendation;
+                  return newErrors;
+                });
+              }
+            }}
             style={{
               width: "100%",
               padding: "12px 14px",
               borderRadius: "12px",
-              border: "1px solid #e2e8f0",
+              border: validationErrors.recommendation ? "1px solid #ef4444" : "1px solid #e2e8f0",
               background: "#fff",
               fontSize: "0.95rem",
               outline: "none",
               transition: "border 0.2s",
             }}
             onFocus={(e) => (e.target.style.borderColor = "#16a34a")}
-            onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+            onBlur={(e) => {
+              if (!validationErrors.recommendation) e.target.style.borderColor = "#e2e8f0";
+            }}
           >
             <option value="">Select recommendation</option>
             <option value="accept">Accept</option>
@@ -421,31 +471,36 @@ const ReviewSubmissionPage = () => {
             <option value="major_revision">Major Revision</option>
             <option value="reject">Reject</option>
           </select>
+          {validationErrors.recommendation && (
+            <span style={{ fontSize: "0.75rem", color: "#ef4444", marginTop: "4px", display: "block" }}>
+              {validationErrors.recommendation}
+            </span>
+          )}
         </div>
 
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={submitting || !reviewId || !sessionId}
+          disabled={submitting || !reviewId || !sessionId || !isFormValid}
           style={{
             width: "100%",
             padding: "16px",
             borderRadius: "40px",
             border: "none",
-            background: submitting || !reviewId || !sessionId ? "#9ca3af" : "#16a34a",
+            background: submitting || !reviewId || !sessionId || !isFormValid ? "#9ca3af" : "#16a34a",
             color: "#fff",
             fontSize: "1rem",
             fontWeight: 600,
-            cursor: submitting || !reviewId || !sessionId ? "not-allowed" : "pointer",
+            cursor: submitting || !reviewId || !sessionId || !isFormValid ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             transition: "background 0.2s",
-            boxShadow: submitting || !reviewId || !sessionId ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
+            boxShadow: submitting || !reviewId || !sessionId || !isFormValid ? "none" : "0 8px 16px rgba(22,163,74,0.2)",
           }}
-          onMouseEnter={(e) => !submitting && reviewId && sessionId && (e.currentTarget.style.background = "#0d9488")}
-          onMouseLeave={(e) => !submitting && reviewId && sessionId && (e.currentTarget.style.background = "#16a34a")}
+          onMouseEnter={(e) => !submitting && reviewId && sessionId && isFormValid && (e.currentTarget.style.background = "#0d9488")}
+          onMouseLeave={(e) => !submitting && reviewId && sessionId && isFormValid && (e.currentTarget.style.background = "#16a34a")}
         >
           {submitting ? <Spinner size={20} color="#fff" /> : "Submit Review"}
         </button>

@@ -9,11 +9,13 @@ import {
   Mail,
   CheckCircle,
   AlertCircle,
-  RefreshCcw
+  RefreshCcw,
+  Paperclip
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
+const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
 
 interface Manuscript {
   id: number;
@@ -58,6 +60,13 @@ interface RevisionEntry {
   reviewer_name: string;
 }
 
+interface EmailAttachment {
+  id: number;
+  file_path: string;
+  decision_type: string;
+  created_at: string;
+}
+
 const AuthorManuscriptDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -65,8 +74,10 @@ const AuthorManuscriptDetails = () => {
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [revisions, setRevisions] = useState<RevisionEntry[]>([]);
+  const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -78,10 +89,10 @@ const AuthorManuscriptDetails = () => {
       }
 
       try {
+        // Fetch manuscript details
         const res = await authFetch(`${API_BASE}?action=getManuscriptDetails&manuscript_id=${id}`);
         if (res.status === 401) {
           setError("Session expired. Please log in again.");
-          // Optionally redirect after a delay
           setTimeout(() => navigate("/login"), 2000);
           return;
         }
@@ -93,6 +104,13 @@ const AuthorManuscriptDetails = () => {
         setManuscript(data.manuscript);
         setReviews(data.reviews);
         setRevisions(data.revisions);
+
+        // Fetch attachments
+        const attachRes = await authFetch(`${API_BASE}?action=getEmailAttachments&manuscript_id=${id}`);
+        if (attachRes.ok) {
+          const attachData = await attachRes.json();
+          setAttachments(attachData);
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -102,8 +120,37 @@ const AuthorManuscriptDetails = () => {
     fetchDetails();
   }, [id, authFetch, sessionId, navigate]);
 
-  const handleDownload = (filePath: string | null) => {
-    if (filePath) window.open(filePath, "_blank");
+  const handleDownload = async (filePath: string, fileName?: string) => {
+    setDownloadingFile(filePath);
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+      const blob = await response.blob();
+
+      // Determine filename
+      let finalFileName = fileName;
+      if (!finalFileName) {
+        const parts = filePath.split('/');
+        finalFileName = decodeURIComponent(parts[parts.length - 1]);
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = finalFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloadingFile(null);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -157,9 +204,25 @@ const AuthorManuscriptDetails = () => {
 
   const statusBadge = getStatusBadge(manuscript.status);
   const hasPendingRevision = revisions.some(r => !r.addressed);
+  const showAttachments = (manuscript.status === "rejected" || manuscript.status === "under_review") && attachments.length > 0;
+
+  // Spinner style
+  const spinnerStyle = {
+    width: 14,
+    height: 14,
+    border: "2px solid currentColor",
+    borderTop: "2px solid transparent",
+    borderRadius: "50%",
+    display: "inline-block",
+    animation: "spin 0.7s linear infinite"
+  };
 
   return (
     <div className="page" style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px" }}>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
+
       {/* Header with back button */}
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px" }}>
         <button
@@ -234,7 +297,7 @@ const AuthorManuscriptDetails = () => {
           </div>
         )}
 
-        {/* Abstract, background, objective, conclusion sections */}
+        {/* Manuscript content sections */}
         <div className="panel" style={{ padding: "24px" }}>
           <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "16px", color: "#0f172a" }}>Manuscript Content</h3>
           {manuscript.abstract && (
@@ -262,6 +325,53 @@ const AuthorManuscriptDetails = () => {
             </div>
           )}
         </div>
+
+        {/* Editor Attachments (if any) */}
+        {showAttachments && (
+          <div className="panel" style={{ padding: "24px" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "16px", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Paperclip size={18} /> Editor Attachments
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {attachments.map((att, index) => (
+                <div key={att.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e5e7eb", paddingBottom: "8px" }}>
+                  <div>
+                    <strong>Attachment {index + 1}</strong>
+                    <span style={{ fontSize: "0.8rem", color: "#6b7280", marginLeft: "8px" }}>
+                      ({att.decision_type === 'reject' ? 'Rejection' : att.decision_type === 'revision' ? 'Revision Request' : 'Decision'})
+                    </span>
+                    <br />
+                    <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>
+                      {new Date(att.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDownload(att.file_path)}
+                    disabled={downloadingFile === att.file_path}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      background: "#e9ecef",
+                      borderRadius: "6px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    {downloadingFile === att.file_path ? (
+                      <span style={spinnerStyle} />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Reviews */}
         {reviews.length > 0 && (
@@ -322,15 +432,20 @@ const AuthorManuscriptDetails = () => {
           </div>
         )}
 
-        {/* Download buttons */}
+        {/* Download buttons for manuscript files */}
         <div className="panel" style={{ padding: "24px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
           {manuscript.file_path && (
             <button
               className="btn-outline"
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              onClick={() => handleDownload(manuscript.file_path)}
+              onClick={() => handleDownload(manuscript.file_path!)}
+              disabled={downloadingFile === manuscript.file_path}
             >
-              <Download size={16} />
+              {downloadingFile === manuscript.file_path ? (
+                <span style={spinnerStyle} />
+              ) : (
+                <Download size={16} />
+              )}
               Download Manuscript
             </button>
           )}
@@ -338,9 +453,14 @@ const AuthorManuscriptDetails = () => {
             <button
               className="btn-outline"
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              onClick={() => handleDownload(manuscript.galley_proof_file)}
+              onClick={() => handleDownload(manuscript.galley_proof_file!)}
+              disabled={downloadingFile === manuscript.galley_proof_file}
             >
-              <Download size={16} />
+              {downloadingFile === manuscript.galley_proof_file ? (
+                <span style={spinnerStyle} />
+              ) : (
+                <Download size={16} />
+              )}
               Galley Proof
             </button>
           )}
@@ -348,15 +468,20 @@ const AuthorManuscriptDetails = () => {
             <button
               className="btn-outline"
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              onClick={() => handleDownload(manuscript.author_response_file)}
+              onClick={() => handleDownload(manuscript.author_response_file!)}
+              disabled={downloadingFile === manuscript.author_response_file}
             >
-              <Download size={16} />
+              {downloadingFile === manuscript.author_response_file ? (
+                <span style={spinnerStyle} />
+              ) : (
+                <Download size={16} />
+              )}
               Response Letter
             </button>
           )}
         </div>
 
-        {/* If revision required, show action button */}
+        {/* Revision action button */}
         {hasPendingRevision && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button

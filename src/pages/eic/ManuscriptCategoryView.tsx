@@ -1691,6 +1691,7 @@ const EICFileUploadModal: FC<EICFileUploadModalProps> = ({
 };
 
 /* ================= Manuscript Modal ================= */
+/* ================= Manuscript Modal ================= */
 interface ModalProps {
   manuscriptId: number;
   onClose: () => void;
@@ -1718,7 +1719,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
-  const [emailAttachments, setEmailAttachments] = useState<File[]>([]); // NEW
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([]);
 
   const [uploadingCirculating, setUploadingCirculating] = useState(false);
   const [selectedCirculatingFile, setSelectedCirculatingFile] = useState<File | null>(null);
@@ -1810,7 +1811,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     setEmailSubject(`Decision on your submission ${formatManuscriptId(manuscript.id)}`);
     const defaultBody = `Dear Author,\n\nThank you for submitting your manuscript "${manuscript.title}". After careful review, we have decided to ${decision === "reject" ? "reject" : "request revisions"}.\n\n`;
     setEmailBody(defaultBody);
-    setEmailAttachments([]); // Reset attachments
+    setEmailAttachments([]);
     setEmailModalOpen(true);
   };
 
@@ -1818,7 +1819,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     if (e.target.files) {
       const files = Array.from(e.target.files);
       setEmailAttachments(prev => [...prev, ...files]);
-      e.target.value = ''; // allow re-selecting same file
+      e.target.value = '';
     }
   };
 
@@ -1841,14 +1842,13 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     try {
       const emailRes = await fetch(`${API}?action=sendDecisionEmail`, {
         method: "POST",
-        body: formData, // Content-Type automatically set to multipart/form-data
+        body: formData,
       });
       const result = await emailRes.json();
       if (!emailRes.ok) {
         throw new Error(result.error || "Failed to send email");
       }
 
-      // After email is sent, update manuscript status
       const decisionRes = await fetch(`${API}?action=decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2187,7 +2187,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         </div>
 
-        {/* Abstract and other sections... (unchanged) */}
+        {/* Abstract and other sections... */}
         {manuscript.abstract && (
           <div style={{ marginBottom: "16px" }}>
             <strong>Abstract</strong>
@@ -2301,113 +2301,113 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         )}
 
         {isNewSubmission && (
-          <div style={{ marginBottom: "16px", marginTop: "24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-              <User size={20} style={{ color: "#198754" }} />
-              <strong style={{ color: "#374151" }}>Assign Editor:</strong>
+          <>
+            <div style={{ marginBottom: "16px", marginTop: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <User size={20} style={{ color: "#198754" }} />
+                <strong style={{ color: "#374151" }}>Assign Editor:</strong>
+              </div>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                {editors.map((e) => {
+                  const isSelected = tempEditorId === e.id;
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => handleToggleEditor(e.id)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "20px",
+                        border: isSelected ? "2px solid #198754" : "1px solid #198754",
+                        background: isSelected ? "#198754" : "#d1e7dd",
+                        color: isSelected ? "#fff" : "#0f5132",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {isSelected ? (
+                        <>
+                          <Check size={16} />
+                          {e.name}
+                        </>
+                      ) : (
+                        e.name
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {tempEditorId && (
+                <p style={{ marginTop: "10px", fontSize: "0.85rem", color: "#6b7280", fontStyle: "italic" }}>
+                  Click the checked editor to unassign
+                </p>
+              )}
             </div>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              {editors.map((e) => {
-                const isSelected = tempEditorId === e.id;
-                return (
-                  <button
-                    key={e.id}
-                    onClick={() => handleToggleEditor(e.id)}
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: "20px",
-                      border: isSelected ? "2px solid #198754" : "1px solid #198754",
-                      background: isSelected ? "#198754" : "#d1e7dd",
-                      color: isSelected ? "#fff" : "#0f5132",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "0.9rem",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {isSelected ? (
-                      <>
-                        <Check size={16} />
-                        {e.name}
-                      </>
-                    ) : (
-                      e.name
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {tempEditorId && (
-              <p style={{ marginTop: "10px", fontSize: "0.85rem", color: "#6b7280", fontStyle: "italic" }}>
-                Click the checked editor to unassign
-              </p>
-            )}
-          </div>
-        )}
 
-        {isNewSubmission && (
-          <div
-            style={{
-              marginBottom: "16px",
-              marginTop: "20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <UserCheck size={20} style={{ color: "#0d6efd" }} />
-            <strong style={{ color: "#374151" }}>Reviewers:</strong>
-            <button
-              onClick={() => setShowReviewerModal(true)}
+            <div
               style={{
-                marginLeft: "8px",
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "none",
-                backgroundColor: "#0d6efd",
-                color: "#fff",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-              }}
-            >
-              <UserCheck size={16} /> Select
-            </button>
-            <span style={{ marginLeft: "12px", color: "#374151", fontSize: "0.9rem" }}>
-              {tempReviewers.join(", ") || "None selected"}
-            </span>
-          </div>
-        )}
-
-        {isNewSubmission && tempEditorId && tempReviewers.length === 3 && (
-          <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
-            <button
-              onClick={handleAssignAll}
-              disabled={btnLoading === "assignAll"}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#0d6efd",
-                color: "#fff",
-                cursor: "pointer",
+                marginBottom: "16px",
+                marginTop: "20px",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                opacity: btnLoading === "assignAll" ? 0.7 : 1,
               }}
             >
-              {btnLoading === "assignAll" ? <Spinner /> : <CheckCircle size={18} />}
-              Assign Reviewers & Editor
-            </button>
-          </div>
+              <UserCheck size={20} style={{ color: "#0d6efd" }} />
+              <strong style={{ color: "#374151" }}>Reviewers:</strong>
+              <button
+                onClick={() => setShowReviewerModal(true)}
+                style={{
+                  marginLeft: "8px",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: "#0d6efd",
+                  color: "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                }}
+              >
+                <UserCheck size={16} /> Select
+              </button>
+              <span style={{ marginLeft: "12px", color: "#374151", fontSize: "0.9rem" }}>
+                {tempReviewers.join(", ") || "None selected"}
+              </span>
+            </div>
+
+            {tempEditorId && tempReviewers.length === 3 && (
+              <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={handleAssignAll}
+                  disabled={btnLoading === "assignAll"}
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "#0d6efd",
+                    color: "#fff",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    opacity: btnLoading === "assignAll" ? 0.7 : 1,
+                  }}
+                >
+                  {btnLoading === "assignAll" ? <Spinner /> : <CheckCircle size={18} />}
+                  Assign Reviewers & Editor
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {isUnderReview && (
@@ -2649,90 +2649,93 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 );
               })
             )}
+          </div>
+        )}
 
-            <div
+        {/* Decision Buttons – shown for both New Submissions and Under Review (if not accepted) */}
+        {(isNewSubmission || isUnderReview) && !isAccepted && (
+          <div
+            style={{
+              marginTop: "24px",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "12px",
+              borderTop: "2px solid #e5e7eb",
+              paddingTop: "20px",
+            }}
+          >
+            <button
+              disabled={btnLoading === "reject"}
+              onClick={() => openEmailModal("reject")}
               style={{
-                marginTop: "24px",
+                padding: "10px 18px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#dc2626",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "0.9rem",
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: "12px",
-                borderTop: "2px solid #e5e7eb",
-                paddingTop: "20px",
+                alignItems: "center",
+                gap: "8px",
+                opacity: btnLoading === "reject" ? 0.7 : 1,
               }}
             >
-              <button
-                disabled={btnLoading === "reject"}
-                onClick={() => openEmailModal("reject")}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#dc2626",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  opacity: btnLoading === "reject" ? 0.7 : 1,
-                }}
-              >
-                <XCircle size={18} />
-                Reject
-              </button>
+              <XCircle size={18} />
+              Reject
+            </button>
 
-              <button
-                disabled={btnLoading === "revision"}
-                onClick={() => openEmailModal("revision")}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#f59e0b",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  opacity: btnLoading === "revision" ? 0.7 : 1,
-                }}
-              >
-                <Edit3 size={18} />
-                Request Revision
-              </button>
+            <button
+              disabled={btnLoading === "revision"}
+              onClick={() => openEmailModal("revision")}
+              style={{
+                padding: "10px 18px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#f59e0b",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: btnLoading === "revision" ? 0.7 : 1,
+              }}
+            >
+              <Edit3 size={18} />
+              Request Revision
+            </button>
 
-              <button
-                disabled={btnLoading === "accept"}
-                onClick={async () => {
-                  setBtnLoading("accept");
-                  await fetch(`${API}?action=decision`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ manuscript_id: manuscript.id, decision: "accept" }),
-                  });
-                  setBtnLoading(null);
-                  onUpdated();
-                  onClose();
-                }}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#16a34a",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "0.9rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  opacity: btnLoading === "accept" ? 0.7 : 1,
-                }}
-              >
-                {btnLoading === "accept" ? <Spinner /> : <CheckCircle size={18} />}
-                Accept
-              </button>
-            </div>
+            <button
+              disabled={btnLoading === "accept"}
+              onClick={async () => {
+                setBtnLoading("accept");
+                await fetch(`${API}?action=decision`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ manuscript_id: manuscript.id, decision: "accept" }),
+                });
+                setBtnLoading(null);
+                onUpdated();
+                onClose();
+              }}
+              style={{
+                padding: "10px 18px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#16a34a",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: btnLoading === "accept" ? 0.7 : 1,
+              }}
+            >
+              {btnLoading === "accept" ? <Spinner /> : <CheckCircle size={18} />}
+              Accept
+            </button>
           </div>
         )}
       </div>
