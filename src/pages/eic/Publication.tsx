@@ -1,10 +1,39 @@
 import { useState, useEffect } from "react";
 import type { FC, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { DollarSign, CheckCircle, FileText, ArrowLeft, Paperclip, Download } from "lucide-react";
+import { CheckCircle, FileText, ArrowLeft, Paperclip, Download, Eye, Save } from "lucide-react";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/EICpublicationApi.php";
-const UPLOAD_URL = "https://afmjonline.com/api/upload.php"; // Implement this endpoint
+const UPLOAD_URL = "https://afmjonline.com/api/upload.php";
+const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
+
+// Spinner component for buttons
+const Spinner = ({ dark = false }: { dark?: boolean }) => (
+  <span
+    style={{
+      width: 14,
+      height: 14,
+      border: `2px solid ${dark ? "#198754" : "#fff"}`,
+      borderTop: "2px solid transparent",
+      borderRadius: "50%",
+      display: "inline-block",
+      animation: "spin 0.7s linear infinite",
+    }}
+  />
+);
+
+// Add global animation style
+const GlobalStyles = () => (
+  <style>{`
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `}</style>
+);
 
 interface Manuscript {
   id: number;
@@ -15,33 +44,63 @@ interface Manuscript {
   paymentAssigned?: boolean;
   paymentAmount?: number;
   paymentStatus?: "pending" | "paid";
+  paymentProof?: string;
   galleyProofStatus?: "pending" | "withAuthor" | "awaitingReview" | "approved";
   galleyProofComment?: string;
-  galleyProofFile?: string; // file path
-  authorFile?: string;      // file path
+  galleyProofFile?: string;
+  authorFile?: string;
+  galleyAuthorResponse?: string;
+  galleyFinalFile?: string;
+  abstract?: string;
+  objective?: string;
+  methods?: string;
+  results?: string;
+  conclusion?: string;
+  studyType?: string;
 }
 
 const Publication: FC = () => {
   const navigate = useNavigate();
-  // Separate state for each tab
+  const { authFetch } = useAuth();
   const [pendingList, setPendingList] = useState<Manuscript[]>([]);
   const [paymentList, setPaymentList] = useState<Manuscript[]>([]);
   const [galleyList, setGalleyList] = useState<Manuscript[]>([]);
+  const [awaitingList, setAwaitingList] = useState<Manuscript[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pending" | "payment" | "galleyProof">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "payment" | "galleyProof" | "awaiting">("pending");
   const [selectedManuscript, setSelectedManuscript] = useState<Manuscript | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentAmountNgn, setPaymentAmountNgn] = useState<number>(0);
+  const [paymentAmountUsd, setPaymentAmountUsd] = useState<number>(0);
+  const [paymentInstructions, setPaymentInstructions] = useState<string>("");
   const [comment, setComment] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [publicationFile, setPublicationFile] = useState<File | null>(null);
+  const [publicationUploading, setPublicationUploading] = useState(false);
+  const [savingPublicationData, setSavingPublicationData] = useState(false);
 
-  // Convert frontend tab to API type
+  // Editable fields for the "Awaiting Publication" modal
+  const [editAuthors, setEditAuthors] = useState("");
+  const [editStudyType, setEditStudyType] = useState("");
+  const [editAbstract, setEditAbstract] = useState("");
+  const [editObjective, setEditObjective] = useState("");
+  const [editMethods, setEditMethods] = useState("");
+  const [editResults, setEditResults] = useState("");
+  const [editConclusion, setEditConclusion] = useState("");
+
+  // Loading states for various actions
+  const [assigningPayment, setAssigningPayment] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<number | null>(null);
+  const [submittingForPublication, setSubmittingForPublication] = useState<number | null>(null);
+  const [sendingToAuthor, setSendingToAuthor] = useState(false);
+  const [publishingFromAwaiting, setPublishingFromAwaiting] = useState<number | null>(null);
+
   const getApiType = (tab: string) => {
     if (tab === "galleyProof") return "galley";
+    if (tab === "awaiting") return "awaiting";
     return tab;
   };
 
-  // Fetch manuscripts for a given tab and update the corresponding state
   const fetchTabData = async (tab: string) => {
     const type = getApiType(tab);
     try {
@@ -51,15 +110,18 @@ const Publication: FC = () => {
         if (tab === "pending") setPendingList(data);
         else if (tab === "payment") setPaymentList(data);
         else if (tab === "galleyProof") setGalleyList(data);
+        else if (tab === "awaiting") setAwaitingList(data);
+        toast.success(`Loaded ${data.length} manuscript(s) for ${tab}`);
       } else {
         console.error(`Failed to load ${tab} manuscripts:`, data.error);
+        toast.error(data.error || `Failed to load ${tab} manuscripts`);
       }
     } catch (err) {
       console.error(`Network error fetching ${tab}:`, err);
+      toast.error(`Network error: ${err}`);
     }
   };
 
-  // Fetch all tabs on mount
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
@@ -67,16 +129,17 @@ const Publication: FC = () => {
         fetchTabData("pending"),
         fetchTabData("payment"),
         fetchTabData("galleyProof"),
+        fetchTabData("awaiting"),
       ]);
       setLoading(false);
     };
     fetchAll();
   }, []);
 
-  // Individual fetch helpers for refresh after actions
   const refreshPending = () => fetchTabData("pending");
   const refreshPayment = () => fetchTabData("payment");
   const refreshGalley = () => fetchTabData("galleyProof");
+  const refreshAwaiting = () => fetchTabData("awaiting");
 
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -89,15 +152,22 @@ const Publication: FC = () => {
 
   const assignPayment = (m: Manuscript) => {
     setSelectedManuscript(m);
-    setPaymentAmount(0);
+    setPaymentAmountNgn(0);
+    setPaymentAmountUsd(0);
+    setPaymentInstructions("");
   };
 
-  const handlePaymentAssign = async (manuscript: Manuscript, free: boolean) => {
+  const handlePaymentAssign = async (manuscript: Manuscript) => {
+    if (paymentAmountNgn <= 0) {
+      toast.warn("Please enter a valid amount (₦) greater than 0");
+      return;
+    }
+    setAssigningPayment(true);
     try {
       const payload = {
         manuscript_id: manuscript.id,
-        amount: free ? 0 : paymentAmount,
-        free,
+        amount: paymentAmountNgn,
+        instructions: paymentInstructions,
       };
       const res = await fetch(`${API_BASE}?action=assignPayment`, {
         method: "POST",
@@ -106,20 +176,19 @@ const Publication: FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      toast.success("Payment assigned and email sent to author!");
       setSelectedManuscript(null);
-      // Refresh both pending and payment lists (pending loses one, payment may gain one)
       await refreshPending();
       await refreshPayment();
-      if (free) {
-        setActiveTab("galleyProof");
-        await refreshGalley(); // free moves to galley, so refresh galley too
-      }
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    } finally {
+      setAssigningPayment(false);
     }
   };
 
   const markPaymentPaid = async (id: number) => {
+    setMarkingPaid(id);
     try {
       const res = await fetch(`${API_BASE}?action=markPaid`, {
         method: "POST",
@@ -128,20 +197,23 @@ const Publication: FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      // Refresh payment and galley lists
+      toast.success("Payment marked as paid!");
       await refreshPayment();
       await refreshGalley();
       setActiveTab("galleyProof");
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    } finally {
+      setMarkingPaid(null);
     }
   };
 
   const sendToAuthor = async (manuscript: Manuscript) => {
     if (!comment || !file) {
-      alert("Comment and file are required");
+      toast.warn("Comment and file are required");
       return;
     }
+    setSendingToAuthor(true);
     setUploading(true);
     try {
       const filePath = await uploadFile(file);
@@ -156,19 +228,21 @@ const Publication: FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      toast.success("Galley proof sent to author!");
       setComment("");
       setFile(null);
       setSelectedManuscript(null);
-      // Refresh galley list (status changed)
       await refreshGalley();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setUploading(false);
+      setSendingToAuthor(false);
     }
   };
 
-  const approveGalleyProof = async (manuscript: Manuscript) => {
+  const submitForPublication = async (manuscript: Manuscript) => {
+    setSubmittingForPublication(manuscript.id);
     try {
       const res = await fetch(`${API_BASE}?action=approveGalley`, {
         method: "POST",
@@ -177,26 +251,90 @@ const Publication: FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      toast.success("Manuscript submitted for publication!");
       setSelectedManuscript(null);
-      await refreshGalley(); // status changed to approved
+      await refreshGalley();
+      await refreshAwaiting();
+      setActiveTab("awaiting");
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    } finally {
+      setSubmittingForPublication(null);
     }
   };
 
-  const publishManuscript = async (id: number) => {
+  const publishFromAwaiting = async (manuscript: Manuscript) => {
+    if (!publicationFile) {
+      toast.warn("Please select the final PDF file to publish");
+      return;
+    }
+    setPublishingFromAwaiting(manuscript.id);
+    setPublicationUploading(true);
     try {
-      const res = await fetch(`${API_BASE}?action=publish`, {
+      const filePath = await uploadFile(publicationFile);
+      const res = await fetch(`${API_BASE}?action=publishFromAwaiting`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manuscript_id: id }),
+        body: JSON.stringify({
+          manuscript_id: manuscript.id,
+          publication_file: filePath,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      // Remove from galley list; refresh galley
-      await refreshGalley();
+      toast.success("Manuscript published successfully!");
+      setPublicationFile(null);
+      setSelectedManuscript(null);
+      await refreshAwaiting();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    } finally {
+      setPublicationUploading(false);
+      setPublishingFromAwaiting(null);
+    }
+  };
+
+  // NEW: Save edited publication data (authors, abstract, etc.)
+  const savePublicationData = async (manuscript: Manuscript) => {
+    setSavingPublicationData(true);
+    try {
+      const payload = {
+        manuscript_id: manuscript.id,
+        authors: editAuthors,
+        study_type: editStudyType,
+        abstract: editAbstract,
+        objective: editObjective,
+        methods: editMethods,
+        results: editResults,
+        conclusion: editConclusion,
+      };
+      const res = await fetch(`${API_BASE}?action=updatePublicationData`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save changes");
+      toast.success("Publication data updated successfully!");
+      // Refresh the list to show updated data
+      await refreshAwaiting();
+      // Update the selected manuscript with the new values
+      if (selectedManuscript) {
+        setSelectedManuscript({
+          ...selectedManuscript,
+          authors: editAuthors,
+          studyType: editStudyType,
+          abstract: editAbstract,
+          objective: editObjective,
+          methods: editMethods,
+          results: editResults,
+          conclusion: editConclusion,
+        });
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingPublicationData(false);
     }
   };
 
@@ -204,16 +342,77 @@ const Publication: FC = () => {
     if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
   };
 
-  const downloadFile = (filePath?: string) => {
-    if (!filePath) return;
-    window.open(filePath, "_blank");
+  const handlePublicationFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = e.target.files[0];
+      if (selected.type !== "application/pdf") {
+        toast.error("Only PDF files are allowed for publication.");
+        return;
+      }
+      setPublicationFile(selected);
+    }
   };
 
-  // Determine which list to display based on activeTab
-  const currentList = 
+  const downloadFile = async (filePath?: string, fileName?: string) => {
+    if (!filePath) {
+      toast.error("No file available");
+      return;
+    }
+    const toastId = toast.loading("Downloading...");
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      let extension = "";
+      const parts = filePath.split(".");
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes("?")) extension = extension.split("?")[0];
+      }
+      const finalName = fileName || `file_${Date.now()}${extension ? "." + extension : ""}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = finalName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+      toast.update(toastId, {
+        render: "Downloaded successfully",
+        type: "success",
+        isLoading: false,
+        autoClose: 3000,
+      });
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.update(toastId, {
+        render: "Download failed",
+        type: "error",
+        isLoading: false,
+        autoClose: 3000,
+      });
+    }
+  };
+
+  // When the "Prepare Publication" button is clicked, populate the editable fields
+  const openAwaitingModal = (m: Manuscript) => {
+    setSelectedManuscript(m);
+    setEditAuthors(m.authors || "");
+    setEditStudyType(m.studyType || "");
+    setEditAbstract(m.abstract || "");
+    setEditObjective(m.objective || "");
+    setEditMethods(m.methods || "");
+    setEditResults(m.results || "");
+    setEditConclusion(m.conclusion || "");
+  };
+
+  const currentList =
     activeTab === "pending" ? pendingList :
     activeTab === "payment" ? paymentList :
-    galleyList;
+    activeTab === "galleyProof" ? galleyList :
+    awaitingList;
 
   const cardStyle = {
     border: "1px solid #e5e7eb",
@@ -258,6 +457,8 @@ const Publication: FC = () => {
 
   return (
     <div className="content" style={{ padding: "24px" }}>
+      <GlobalStyles />
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px" }}>
         <button
           onClick={() => navigate(-1)}
@@ -277,12 +478,12 @@ const Publication: FC = () => {
         <h1 style={{ margin: 0 }}>Publication Decisions</h1>
       </div>
 
-      {/* Tabs with counts from separate lists */}
       <div style={{ display: "flex", gap: "12px", marginBottom: "24px", flexWrap: "wrap" }}>
         {[
           { key: "pending", label: `Pending Decisions (${pendingList.length})` },
           { key: "payment", label: `Payment Status (${paymentList.length})` },
           { key: "galleyProof", label: `Galley Proof (${galleyList.length})` },
+          { key: "awaiting", label: `Awaiting Publication (${awaitingList.length})` },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -324,12 +525,24 @@ const Publication: FC = () => {
 
                 {activeTab === "pending" && <small>Accepted: {m.acceptedDate}</small>}
                 {activeTab === "payment" && (
-                  <small>
-                    Amount: {m.paymentAmount} | Status:{" "}
-                    {m.paymentStatus === "pending"
-                      ? badge("Pending", "#dc2626", "Payment not yet received")
-                      : badge("Paid", "#10b981", "Payment completed")}
-                  </small>
+                  <div>
+                    <small>
+                      Amount: ₦{m.paymentAmount} | Status:{" "}
+                      {m.paymentStatus === "pending"
+                        ? badge("Pending", "#dc2626", "Payment not yet received")
+                        : badge("Paid", "#10b981", "Payment completed")}
+                    </small>
+                    {m.paymentProof && (
+                      <div style={{ marginTop: "4px", display: "flex", gap: "8px" }}>
+                        <button
+                          onClick={() => downloadFile(m.paymentProof, `payment_proof_${m.manuscriptId}`)}
+                          style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151", padding: "2px 8px", fontSize: "12px" }}
+                        >
+                          <Download size={12} /> Download
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {activeTab === "galleyProof" && (
                   <small>
@@ -343,32 +556,35 @@ const Publication: FC = () => {
                       : badge("Approved", "#10b981", "Galley proof approved")}
                   </small>
                 )}
+                {activeTab === "awaiting" && (
+                  <small>Ready for publication – upload final PDF and publish.</small>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 {activeTab === "pending" && (
-                  <>
-                    <button
-                      onClick={() => assignPayment(m)}
-                      style={{ ...buttonStyle, background: "#0d6efd", color: "#fff" }}
-                    >
-                      <DollarSign size={16} /> Assign Payment
-                    </button>
-                    <button
-                      onClick={() => handlePaymentAssign(m, true)}
-                      style={{ ...buttonStyle, background: "#10b981", color: "#fff" }}
-                    >
-                      <CheckCircle size={16} /> Proceed Free
-                    </button>
-                  </>
+                  <button
+                    onClick={() => assignPayment(m)}
+                    style={{ ...buttonStyle, background: "#0d6efd", color: "#fff" }}
+                  >
+                    Assign Payment
+                  </button>
                 )}
 
                 {activeTab === "payment" && m.paymentStatus === "pending" && (
                   <button
                     onClick={() => markPaymentPaid(m.id)}
-                    style={{ ...buttonStyle, background: "#10b981", color: "#fff" }}
+                    disabled={markingPaid === m.id}
+                    style={{
+                      ...buttonStyle,
+                      background: "#10b981",
+                      color: "#fff",
+                      opacity: markingPaid === m.id ? 0.7 : 1,
+                      cursor: markingPaid === m.id ? "not-allowed" : "pointer",
+                    }}
                   >
-                    <DollarSign size={16} /> Mark Paid
+                    {markingPaid === m.id ? <Spinner /> : <CheckCircle size={16} />}
+                    {markingPaid === m.id ? "Processing..." : "Mark Paid"}
                   </button>
                 )}
 
@@ -377,16 +593,16 @@ const Publication: FC = () => {
                     onClick={() => setSelectedManuscript(m)}
                     style={{ ...buttonStyle, background: "#0d6efd", color: "#fff" }}
                   >
-                    <FileText size={16} /> Finalize
+                    <FileText size={16} /> Manage Galley
                   </button>
                 )}
 
-                {activeTab === "galleyProof" && m.galleyProofStatus === "approved" && (
+                {activeTab === "awaiting" && (
                   <button
-                    onClick={() => publishManuscript(m.id)}
+                    onClick={() => openAwaitingModal(m)}
                     style={{ ...buttonStyle, background: "#16a34a", color: "#fff" }}
                   >
-                    <CheckCircle size={16} /> Publish
+                    <Eye size={16} /> Prepare Publication
                   </button>
                 )}
               </div>
@@ -395,8 +611,8 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* Modal */}
-      {selectedManuscript && (
+      {/* Modal for Assign Payment – Independent NGN and USD fields */}
+      {selectedManuscript && activeTab === "pending" && (
         <div
           style={{
             position: "fixed",
@@ -419,160 +635,463 @@ const Publication: FC = () => {
               boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             }}
           >
-            {activeTab === "pending" ? (
-              <>
-                <h3 style={{ marginBottom: "16px" }}>
-                  Assign Payment: {selectedManuscript.manuscriptId} - {selectedManuscript.title}
-                </h3>
+            <h3 style={{ marginBottom: "16px" }}>
+              Assign Payment: {selectedManuscript.manuscriptId} - {selectedManuscript.title}
+            </h3>
 
-                <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
-                  Amount (leave 0 for free):
-                  <input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                    style={{
-                      width: "100%",
-                      marginTop: "8px",
-                      padding: "8px",
-                      borderRadius: "6px",
-                      border: "1px solid #d1d5db",
-                      outline: "none",
-                    }}
-                  />
-                </label>
+            <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
+              Amount (₦):
+              <input
+                type="number"
+                value={paymentAmountNgn}
+                onChange={(e) => setPaymentAmountNgn(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                }}
+              />
+            </label>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
+              Amount ($USD) – optional, for your reference only (not sent to author):
+              <input
+                type="number"
+                step="0.01"
+                value={paymentAmountUsd}
+                onChange={(e) => setPaymentAmountUsd(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  background: "#f9fafb",
+                }}
+              />
+            </label>
+
+            <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
+              Payment Instructions / Letter (include amount, payment link, etc.):
+              <textarea
+                value={paymentInstructions}
+                onChange={(e) => setPaymentInstructions(e.target.value)}
+                rows={5}
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Example: Please pay ₦50,000 to account 0123456789 (Bank Name) on or before 2025-05-01. Use your manuscript ID as reference."
+              />
+            </label>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+              <button
+                onClick={() => setSelectedManuscript(null)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handlePaymentAssign(selectedManuscript)}
+                disabled={assigningPayment}
+                style={{
+                  ...buttonStyle,
+                  background: "#0d6efd",
+                  color: "#fff",
+                  opacity: assigningPayment ? 0.7 : 1,
+                  cursor: assigningPayment ? "not-allowed" : "pointer",
+                }}
+              >
+                {assigningPayment ? <Spinner /> : null}
+                {assigningPayment ? "Assigning..." : "Assign Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Galley Proof (unchanged) */}
+      {selectedManuscript && activeTab === "galleyProof" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.3)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "24px",
+              borderRadius: "10px",
+              width: "500px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3 style={{ marginBottom: "16px" }}>
+              Galley Proof: {selectedManuscript.manuscriptId} - {selectedManuscript.title}
+            </h3>
+
+            <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
+              Comment to Author:
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  minHeight: "80px",
+                }}
+              />
+            </label>
+
+            <label style={{ display: "block", marginBottom: "12px", fontWeight: 500, cursor: "pointer" }}>
+              <Paperclip size={16} /> Attach Document (optional):
+              <input
+                type="file"
+                onChange={handleFileChange}
+                style={{ marginTop: "8px", display: "block" }}
+                disabled={uploading}
+              />
+            </label>
+
+            {selectedManuscript.galleyProofComment && (
+              <div style={{ marginBottom: "12px" }}>
+                <strong>EIC Comment sent to author:</strong>
+                <p style={{ margin: "6px 0", color: "#374151" }}>{selectedManuscript.galleyProofComment}</p>
+                {selectedManuscript.galleyProofFile && (
                   <button
-                    onClick={() => setSelectedManuscript(null)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #d1d5db",
-                      background: "#f3f4f6",
-                      cursor: "pointer",
-                    }}
+                    onClick={() => downloadFile(selectedManuscript.galleyProofFile, "eic_attachment")}
+                    style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
                   >
-                    Cancel
+                    <Download size={16} /> Download EIC file
                   </button>
-                  <button
-                    onClick={() => handlePaymentAssign(selectedManuscript, false)}
-                    style={{ ...buttonStyle, background: "#0d6efd", color: "#fff" }}
-                  >
-                    <DollarSign size={16} /> Assign
-                  </button>
-                  <button
-                    onClick={() => handlePaymentAssign(selectedManuscript, true)}
-                    style={{ ...buttonStyle, background: "#10b981", color: "#fff" }}
-                  >
-                    <CheckCircle size={16} /> Publish Free
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 style={{ marginBottom: "16px" }}>
-                  Galley Proof: {selectedManuscript.manuscriptId} - {selectedManuscript.title}
-                </h3>
-
-                <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
-                  Comment:
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    style={{
-                      width: "100%",
-                      marginTop: "8px",
-                      padding: "8px",
-                      borderRadius: "6px",
-                      border: "1px solid #d1d5db",
-                      outline: "none",
-                      minHeight: "80px",
-                    }}
-                  />
-                </label>
-
-                <label style={{ display: "block", marginBottom: "12px", fontWeight: 500, cursor: "pointer" }}>
-                  <Paperclip size={16} /> Attach Document:
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    style={{ marginTop: "8px", display: "block" }}
-                    disabled={uploading}
-                  />
-                </label>
-
-                {selectedManuscript.galleyProofComment && (
-                  <div style={{ marginBottom: "12px" }}>
-                    <strong>EIC Comment sent to author</strong>
-                    <p style={{ margin: "6px 0", color: "#374151" }}>{selectedManuscript.galleyProofComment}</p>
-                    {selectedManuscript.galleyProofFile && (
-                      <button
-                        onClick={() => downloadFile(selectedManuscript.galleyProofFile)}
-                        style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
-                      >
-                        <Download size={16} /> Download EIC file
-                      </button>
-                    )}
-                  </div>
                 )}
-
-                {selectedManuscript.authorFile && (
-                  <div style={{ marginBottom: "12px" }}>
-                    <strong>Author reply (corrected manuscript)</strong>
-                    <div style={{ marginTop: "6px" }}>
-                      <button
-                        onClick={() => downloadFile(selectedManuscript.authorFile)}
-                        style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
-                      >
-                        <Download size={16} /> Download author file
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-                  <button
-                    onClick={() => setSelectedManuscript(null)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #d1d5db",
-                      background: "#f3f4f6",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    disabled={!comment || !file || uploading}
-                    onClick={() => sendToAuthor(selectedManuscript)}
-                    style={{
-                      ...buttonStyle,
-                      background: !comment || !file || uploading ? "#9ca3af" : "#0d6efd",
-                      color: "#fff",
-                      cursor: !comment || !file || uploading ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {uploading ? "Uploading..." : <><CheckCircle size={16} /> Send to Author</>}
-                  </button>
-
-                  <button
-                    disabled={selectedManuscript.galleyProofStatus !== "awaitingReview"}
-                    onClick={() => approveGalleyProof(selectedManuscript)}
-                    style={{
-                      ...buttonStyle,
-                      background: selectedManuscript.galleyProofStatus === "awaitingReview" ? "#10b981" : "#9ca3af",
-                      color: "#fff",
-                      cursor: selectedManuscript.galleyProofStatus === "awaitingReview" ? "pointer" : "not-allowed",
-                    }}
-                  >
-                    <CheckCircle size={16} /> Approve
-                  </button>
-                </div>
-              </>
+              </div>
             )}
+
+            {selectedManuscript.authorFile && (
+              <div style={{ marginBottom: "12px" }}>
+                <strong>Author reply (corrected manuscript):</strong>
+                <div style={{ marginTop: "6px" }}>
+                  <button
+                    onClick={() => downloadFile(selectedManuscript.authorFile, "author_corrected_file")}
+                    style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
+                  >
+                    <Download size={16} /> Download author file
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedManuscript.galleyAuthorResponse && (
+              <div style={{ marginBottom: "12px" }}>
+                <strong>Authors corrections/Comment:</strong>
+                <p style={{ margin: "6px 0", color: "#374151", background: "#f1f5f9", padding: "8px", borderRadius: "6px" }}>
+                  {selectedManuscript.galleyAuthorResponse}
+                </p>
+              </div>
+            )}
+
+            {selectedManuscript.galleyFinalFile && (
+              <div style={{ marginBottom: "12px" }}>
+                <strong>Author's Final File:</strong>
+                <div style={{ marginTop: "6px" }}>
+                  <button
+                    onClick={() => downloadFile(selectedManuscript.galleyFinalFile, "author_final_file")}
+                    style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
+                  >
+                    <Download size={16} /> Download author's final file
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+              <button
+                onClick={() => setSelectedManuscript(null)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                disabled={!comment || !file || uploading || sendingToAuthor}
+                onClick={() => sendToAuthor(selectedManuscript)}
+                style={{
+                  ...buttonStyle,
+                  background: !comment || !file || uploading || sendingToAuthor ? "#9ca3af" : "#0d6efd",
+                  color: "#fff",
+                  cursor: !comment || !file || uploading || sendingToAuthor ? "not-allowed" : "pointer",
+                }}
+              >
+                {uploading ? <Spinner /> : <CheckCircle size={16} />}
+                {uploading ? "Uploading..." : "Send to Author"}
+              </button>
+
+              <button
+                disabled={selectedManuscript.galleyProofStatus !== "awaitingReview" || submittingForPublication === selectedManuscript.id}
+                onClick={() => submitForPublication(selectedManuscript)}
+                style={{
+                  ...buttonStyle,
+                  background: selectedManuscript.galleyProofStatus === "awaitingReview" && submittingForPublication !== selectedManuscript.id ? "#10b981" : "#9ca3af",
+                  color: "#fff",
+                  cursor: selectedManuscript.galleyProofStatus === "awaitingReview" && submittingForPublication !== selectedManuscript.id ? "pointer" : "not-allowed",
+                }}
+              >
+                {submittingForPublication === selectedManuscript.id ? <Spinner /> : <CheckCircle size={16} />}
+                {submittingForPublication === selectedManuscript.id ? "Submitting..." : "Submit for Publication"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODIFIED Modal for Awaiting Publication – now with editable fields */}
+      {selectedManuscript && activeTab === "awaiting" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.3)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedManuscript(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "10px",
+              width: "700px",
+              maxWidth: "95vw",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              padding: "24px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: "8px" }}>
+              Finalize & Edit Publication Data: {selectedManuscript.manuscriptId} - {selectedManuscript.title}
+            </h3>
+            <p style={{ color: "#6b7280", marginBottom: "20px" }}>
+              You can edit the manuscript metadata below before publishing. Leave blank if not needed.
+            </p>
+
+            {/* Editable fields */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Authors</label>
+              <input
+                type="text"
+                value={editAuthors}
+                onChange={(e) => setEditAuthors(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                }}
+                placeholder="Enter author names"
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Study Type</label>
+              <input
+                type="text"
+                value={editStudyType}
+                onChange={(e) => setEditStudyType(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                }}
+                placeholder="e.g., Original Research, Case Report, Review"
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Abstract</label>
+              <textarea
+                value={editAbstract}
+                onChange={(e) => setEditAbstract(e.target.value)}
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Abstract text..."
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Objective</label>
+              <textarea
+                value={editObjective}
+                onChange={(e) => setEditObjective(e.target.value)}
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Objective..."
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Methods</label>
+              <textarea
+                value={editMethods}
+                onChange={(e) => setEditMethods(e.target.value)}
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Methods..."
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Results</label>
+              <textarea
+                value={editResults}
+                onChange={(e) => setEditResults(e.target.value)}
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Results..."
+              />
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Conclusion</label>
+              <textarea
+                value={editConclusion}
+                onChange={(e) => setEditConclusion(e.target.value)}
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Conclusion..."
+              />
+            </div>
+
+            {/* File upload section (unchanged) */}
+            <div style={{ marginBottom: "20px", marginTop: "20px", borderTop: "1px solid #e5e7eb", paddingTop: "20px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                Upload Final Publication File (PDF only):
+              </label>
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handlePublicationFileChange}
+              />
+              {publicationFile && (
+                <div style={{ marginTop: "8px", fontSize: "0.9rem", color: "#16a34a" }}>
+                  Selected: {publicationFile.name}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+              <button
+                onClick={() => setSelectedManuscript(null)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => savePublicationData(selectedManuscript)}
+                disabled={savingPublicationData}
+                style={{
+                  ...buttonStyle,
+                  background: savingPublicationData ? "#9ca3af" : "#0d6efd",
+                  color: "#fff",
+                  cursor: savingPublicationData ? "not-allowed" : "pointer",
+                }}
+              >
+                {savingPublicationData ? <Spinner /> : <Save size={16} />}
+                {savingPublicationData ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                onClick={() => publishFromAwaiting(selectedManuscript)}
+                disabled={!publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id}
+                style={{
+                  ...buttonStyle,
+                  background: !publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id ? "#9ca3af" : "#16a34a",
+                  color: "#fff",
+                  cursor: !publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id ? "not-allowed" : "pointer",
+                }}
+              >
+                {publicationUploading ? <Spinner /> : <CheckCircle size={16} />}
+                {publicationUploading ? "Publishing..." : "Publish"}
+              </button>
+            </div>
           </div>
         </div>
       )}

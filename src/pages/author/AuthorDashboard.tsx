@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FileText,
   Clock,
@@ -16,11 +16,15 @@ import {
   FileCheck,
   X,
   Download,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
+const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
 
 interface DashboardStats {
   totalSubmissions: number;
@@ -48,8 +52,13 @@ interface PendingAction {
   galleyProofStatus?: string;
   galleyProofFile?: string | null;
   galleyProofComment?: string | null;
+  galleyAuthorResponse?: string | null;
+  galleyFinalFile?: string | null;
   paymentAmount?: number | null;
+  paymentAmountUsd?: number | null;
   paymentStatus?: string;
+  paymentInstructions?: string | null;
+  paymentProof?: string | null;
 }
 
 const styles = {
@@ -165,6 +174,8 @@ const styles = {
     border: "1px solid #e2e8f0",
     transition: "all 0.2s",
     cursor: "pointer",
+    textDecoration: "none",
+    display: "block",
   },
   kpiHeader: {
     display: "flex",
@@ -245,72 +256,81 @@ const styles = {
       fontWeight: 500,
     };
   },
+  pagination: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "16px",
+    borderTop: "1px solid #e5e7eb",
+    marginTop: "16px",
+  },
+  paginationButton: {
+    padding: "6px 12px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    color: "#374151",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  },
+  paginationButtonDisabled: {
+    padding: "6px 12px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: "#f3f4f6",
+    color: "#9ca3af",
+    cursor: "not-allowed",
+  },
+  pageNumber: (active: boolean) => ({
+    padding: "6px 12px",
+    borderRadius: "6px",
+    border: "1px solid",
+    borderColor: active ? "#0d6efd" : "#d1d5db",
+    background: active ? "#0d6efd" : "#fff",
+    color: active ? "#fff" : "#374151",
+    cursor: "pointer",
+    minWidth: "36px",
+  }),
 };
 
-// Responsive styles
+// Helper: convert plain text with URLs into clickable links
+const formatWithLinks = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) =>
+    urlRegex.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "#16a34a", textDecoration: "underline" }}>
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+};
+
 const responsiveStyles = `
   @media (max-width: 768px) {
-    .author-dashboard {
-      padding: 16px !important;
-    }
-    .dashboard-title {
-      font-size: 1.5rem !important;
-      margin-bottom: 16px !important;
-    }
-    .kpi-grid {
-      grid-template-columns: repeat(2, 1fr) !important;
-      gap: 12px !important;
-    }
-    .kpi-card {
-      padding: 16px !important;
-    }
-    .kpi-value {
-      font-size: 1.5rem !important;
-    }
-    .kpi-label {
-      font-size: 0.8rem !important;
-    }
-    .kpi-icon-wrapper {
-      width: 40px !important;
-      height: 40px !important;
-    }
-    .pending-grid {
-      gap: 12px !important;
-    }
-    .action-buttons {
-      flex-wrap: wrap !important;
-      gap: 8px !important;
-    }
-    .action-buttons button {
-      width: 100% !important;
-      justify-content: center !important;
-    }
-    .manuscript-list-item {
-      flex-direction: column !important;
-      align-items: flex-start !important;
-      gap: 8px !important;
-    }
-    .manuscript-list-item > div:first-child {
-      width: 100% !important;
-    }
-    .manuscript-list-item button {
-      align-self: flex-end !important;
-    }
+    .author-dashboard { padding: 16px !important; }
+    .dashboard-title { font-size: 1.5rem !important; margin-bottom: 16px !important; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+    .kpi-card { padding: 16px !important; }
+    .kpi-value { font-size: 1.5rem !important; }
+    .kpi-label { font-size: 0.8rem !important; }
+    .kpi-icon-wrapper { width: 40px !important; height: 40px !important; }
+    .pending-grid { gap: 12px !important; }
+    .action-buttons { flex-wrap: wrap !important; gap: 8px !important; }
+    .action-buttons button { width: 100% !important; justify-content: center !important; }
+    .manuscript-list-item { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+    .manuscript-list-item > div:first-child { width: 100% !important; }
+    .manuscript-list-item button { align-self: flex-end !important; }
   }
   @media (max-width: 480px) {
-    .kpi-grid {
-      grid-template-columns: 1fr !important;
-    }
-    .pending-grid {
-      grid-template-columns: 1fr !important;
-    }
-    .action-buttons button {
-      padding: 8px 12px !important;
-      font-size: 0.9rem !important;
-    }
-    .section-title {
-      font-size: 1rem !important;
-    }
+    .kpi-grid { grid-template-columns: 1fr !important; }
+    .pending-grid { grid-template-columns: 1fr !important; }
+    .action-buttons button { padding: 8px 12px !important; font-size: 0.9rem !important; }
+    .section-title { font-size: 1rem !important; }
   }
 `;
 
@@ -327,6 +347,11 @@ const AuthorDashboard = () => {
   const [hoveredKpi, setHoveredKpi] = useState<number | null>(null);
   const [galleyComment, setGalleyComment] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+
+  // Pagination state for Active Manuscripts
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const handleUnauthorized = () => {
     toast.error("Session expired. Please log in again.");
@@ -374,10 +399,11 @@ const AuthorDashboard = () => {
     fetchDashboardData();
   }, [authFetch, sessionId, navigate]);
 
-  const handleNewSubmission = () => navigate("/author/submit");
-  const handleViewSubmissions = () => navigate("/author/submissions");
-  const handleRespondRevision = () => navigate("/author/revisions");
-  const handleOpenManuscript = (id: number) => navigate(`/author/manuscript/${id}`);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [manuscripts]);
+
+  const handleOpenManuscript = (id: number) => navigate(`/eic/author/manuscript/${id}`);
 
   const getStatusBadge = (status: string, hasPendingRevision: boolean) => {
     if (hasPendingRevision) {
@@ -404,6 +430,7 @@ const AuthorDashboard = () => {
     setModalOpen(true);
     setGalleyComment("");
     setSelectedFile(null);
+    setPaymentProofFile(null);
   };
 
   const closeModal = () => {
@@ -411,13 +438,47 @@ const AuthorDashboard = () => {
     setSelectedAction(null);
     setGalleyComment("");
     setSelectedFile(null);
+    setPaymentProofFile(null);
   };
 
-  const handleGalleyProofAction = async (action: "approve" | "reject") => {
+  const downloadFile = async (fileUrl: string | null | undefined, fileName: string) => {
+    if (!fileUrl) {
+      toast.error("No file available to download");
+      return;
+    }
+    const toastId = toast.loading("Downloading file...");
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(fileUrl)}`;
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      let extension = "";
+      const parts = fileUrl.split(".");
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes("?")) extension = extension.split("?")[0];
+      }
+      const fullFileName = `${fileName}${extension ? "." + extension : ""}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fullFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("File downloaded successfully", { id: toastId });
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Failed to download file", { id: toastId });
+    }
+  };
+
+  const handleGalleyProofSubmit = async () => {
     if (!selectedAction) return;
 
-    if (action === "reject" && !galleyComment.trim()) {
-      toast.error("Please provide a comment explaining the requested changes");
+    if (!galleyComment.trim() && !selectedFile) {
+      toast.error("Please provide a response or upload a file");
       return;
     }
 
@@ -426,7 +487,7 @@ const AuthorDashboard = () => {
 
     const formData = new FormData();
     formData.append("manuscript_id", selectedAction.id.toString());
-    formData.append("action", action);
+    formData.append("action", "reject");
     formData.append("comment", galleyComment);
     if (selectedFile) {
       formData.append("final_file", selectedFile);
@@ -446,7 +507,7 @@ const AuthorDashboard = () => {
         throw new Error(result.error || "Submission failed");
       }
 
-      toast.success(`Galley proof ${action === "approve" ? "approved" : "changes requested"} successfully`, { id: toastId });
+      toast.success("Your response has been submitted. The editorial team will review it.", { id: toastId });
 
       const pendingRes = await authFetch(`${API_BASE}?action=getPendingPrePublicationActions`);
       if (pendingRes.ok) {
@@ -464,14 +525,56 @@ const AuthorDashboard = () => {
     }
   };
 
-  const handlePayment = async () => {
+  const handlePaymentMade = async () => {
     if (!selectedAction) return;
-    toast.success("Redirecting to payment gateway...");
-    closeModal();
+    setProcessing(true);
+    const toastId = toast.loading("Notifying admin...");
+
+    const formData = new FormData();
+    formData.append("manuscript_id", selectedAction.id.toString());
+    if (paymentProofFile) {
+      formData.append("payment_proof", paymentProofFile);
+    }
+
+    try {
+      const res = await authFetch(`${API_BASE}?action=notifyPaymentMade`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        throw new Error(result.error || "Failed to notify admin");
+      }
+      toast.success("Thank you! The editorial team has been notified.", { id: toastId });
+      closeModal();
+
+      const pendingRes = await authFetch(`${API_BASE}?action=getPendingPrePublicationActions`);
+      if (pendingRes.ok) {
+        const pendingData = await pendingRes.json();
+        setPendingActions(pendingData);
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    } finally {
+      setProcessing(false);
+    }
   };
 
-  const downloadFile = (url: string | null | undefined) => {
-    if (url) window.open(url, "_blank");
+  // Pagination calculations
+  const totalManuscripts = manuscripts.length;
+  const totalPages = Math.ceil(totalManuscripts / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentManuscripts = manuscripts.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
 
   if (loading) {
@@ -487,13 +590,14 @@ const AuthorDashboard = () => {
     );
   }
 
+  // Routes exactly matching the sidebar's manuscript paths
   const kpiData = [
-    { icon: FileText, label: "Total Submissions", value: stats?.totalSubmissions ?? 0 },
-    { icon: Clock, label: "Under Review", value: stats?.underReview ?? 0 },
-    { icon: RefreshCcw, label: "Revisions Required", value: stats?.revisionsRequired ?? 0 },
-    { icon: CheckCircle2, label: "Accepted", value: stats?.accepted ?? 0 },
-    { icon: XCircle, label: "Rejected", value: stats?.rejected ?? 0 },
-    { icon: BookOpen, label: "Published", value: stats?.published ?? 0 },
+    { icon: FileText, label: "Total Submissions", value: stats?.totalSubmissions ?? 0, path: "/eic/manuscripts/new-submissions" },
+    { icon: Clock, label: "Under Review", value: stats?.underReview ?? 0, path: "/eic/manuscripts/under-review" },
+    { icon: RefreshCcw, label: "Revisions Required", value: stats?.revisionsRequired ?? 0, path: "/eic/manuscripts/revision-requested" },
+    { icon: CheckCircle2, label: "Accepted", value: stats?.accepted ?? 0, path: "/eic/manuscripts/accepted" },
+    { icon: XCircle, label: "Rejected", value: stats?.rejected ?? 0, path: "/eic/manuscripts/rejected" },
+    { icon: BookOpen, label: "Published", value: stats?.published ?? 0, path: "/eic/manuscripts/published" },
   ];
 
   return (
@@ -537,7 +641,12 @@ const AuthorDashboard = () => {
                   </div>
                   {action.actionType === "payment" && action.paymentAmount && (
                     <div style={{ marginTop: "8px", fontWeight: 600, color: "#16a34a" }}>
-                      Amount: ${action.paymentAmount}
+                      Amount: ₦{action.paymentAmount}
+                      {action.paymentAmountUsd && (
+                        <span style={{ fontSize: "0.75rem", marginLeft: "8px", color: "#64748b", fontWeight: 400 }}>
+                          (~${action.paymentAmountUsd} USD)
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -551,8 +660,9 @@ const AuthorDashboard = () => {
           {kpiData.map((kpi, index) => {
             const Icon = kpi.icon;
             return (
-              <div
+              <Link
                 key={index}
+                to={kpi.path}
                 className="kpi-card"
                 style={{
                   ...styles.kpiCard,
@@ -564,14 +674,6 @@ const AuthorDashboard = () => {
                 }}
                 onMouseEnter={() => setHoveredKpi(index)}
                 onMouseLeave={() => setHoveredKpi(null)}
-                onClick={() => {
-                  if (kpi.label === "Total Submissions") navigate("/author/submissions");
-                  else if (kpi.label === "Under Review") navigate("/author/submissions?filter=under_review");
-                  else if (kpi.label === "Revisions Required") navigate("/author/revisions");
-                  else if (kpi.label === "Accepted") navigate("/author/submissions?filter=accepted");
-                  else if (kpi.label === "Rejected") navigate("/author/submissions?filter=rejected");
-                  else if (kpi.label === "Published") navigate("/author/published");
-                }}
               >
                 <div style={styles.kpiHeader}>
                   <div className="kpi-icon-wrapper" style={styles.kpiIconWrapper}>
@@ -580,62 +682,100 @@ const AuthorDashboard = () => {
                 </div>
                 <h3 className="kpi-value" style={styles.kpiValue}>{kpi.value}</h3>
                 <p className="kpi-label" style={styles.kpiLabel}>{kpi.label}</p>
-              </div>
+              </Link>
             );
           })}
         </div>
 
-        {/* Author Actions */}
+        {/* Author Actions – keeping as is, but they may need EIC versions if used */}
         <div style={styles.actionsPanel}>
           <div className="section-title" style={styles.sectionTitle}>Author Actions</div>
           <div className="action-buttons" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button className="btn-primary" style={{ ...styles.buttonPrimary, ...btnRow }} onClick={handleNewSubmission}>
+            <Link to="/eic/submit" style={{ ...styles.buttonPrimary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <Plus size={16} />
               New Submission
-            </button>
-            <button className="btn-outline" style={{ ...styles.buttonSecondary, ...btnRow }} onClick={handleViewSubmissions}>
+            </Link>
+            <Link to="/eic/submissions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <List size={16} />
               View Submissions
-            </button>
-            <button className="btn-outline" style={{ ...styles.buttonSecondary, ...btnRow }} onClick={handleRespondRevision}>
+            </Link>
+            <Link to="/eic/revisions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <Reply size={16} />
               Respond to Revision
-            </button>
+            </Link>
           </div>
         </div>
 
-        {/* Active Manuscripts */}
+        {/* Active Manuscripts with Pagination */}
         <div style={styles.actionsPanel}>
           <div className="section-title" style={styles.sectionTitle}>Active Manuscripts</div>
-          {manuscripts.length === 0 ? (
+          {totalManuscripts === 0 ? (
             <p style={{ color: "#6b7280", textAlign: "center", padding: "20px" }}>
               No active manuscripts.
             </p>
           ) : (
-            manuscripts.map((man) => (
-              <div key={man.id} className="manuscript-list-item" style={styles.listItem}>
-                <div>
-                  <div style={styles.manuscriptId}>{man.manuscriptId}</div>
-                  <div style={styles.manuscriptTitle}>{man.title}</div>
+            <>
+              {currentManuscripts.map((man) => (
+                <div key={man.id} className="manuscript-list-item" style={styles.listItem}>
+                  <div>
+                    <div style={styles.manuscriptId}>{man.manuscriptId}</div>
+                    <div style={styles.manuscriptTitle}>{man.title}</div>
+                  </div>
+                  {getStatusBadge(man.status, man.hasPendingRevision)}
+                  <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    {new Date(man.submittedAt).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </div>
+                  <button
+                    className="btn-outline"
+                    style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6 }}
+                    onClick={() => handleOpenManuscript(man.id)}
+                  >
+                    <Eye size={14} />
+                    Open
+                  </button>
                 </div>
-                {getStatusBadge(man.status, man.hasPendingRevision)}
-                <div style={{ fontSize: 13, color: "#6b7280" }}>
-                  {new Date(man.submittedAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
+              ))}
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div style={styles.pagination}>
+                  <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                    Showing {startIndex + 1} to {Math.min(endIndex, totalManuscripts)} of {totalManuscripts} entries
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      style={currentPage === 1 ? styles.paginationButtonDisabled : styles.paginationButton}
+                    >
+                      <ChevronLeft size={16} /> Previous
+                    </button>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => goToPage(page)}
+                          style={styles.pageNumber(currentPage === page)}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      style={currentPage === totalPages ? styles.paginationButtonDisabled : styles.paginationButton}
+                    >
+                      Next <ChevronRight size={16} />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  className="btn-outline"
-                  style={{ ...styles.buttonSecondary, ...btnRow }}
-                  onClick={() => handleOpenManuscript(man.id)}
-                >
-                  <Eye size={14} />
-                  Open
-                </button>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
 
@@ -663,7 +803,7 @@ const AuthorDashboard = () => {
                     {selectedAction.galleyProofFile ? (
                       <button
                         style={{ ...styles.buttonSecondary, marginBottom: "12px" }}
-                        onClick={() => downloadFile(selectedAction.galleyProofFile)}
+                        onClick={() => downloadFile(selectedAction.galleyProofFile, `GalleyProof_${selectedAction.manuscriptId}`)}
                       >
                         <Download size={16} style={{ marginRight: 6 }} />
                         Download Galley Proof
@@ -680,14 +820,36 @@ const AuthorDashboard = () => {
                       </>
                     )}
 
+                    {/* Show author's previous response if any */}
+                    {selectedAction.galleyAuthorResponse && (
+                      <>
+                        <p><strong>Your Previous Response:</strong></p>
+                        <p style={{ background: "#e6f7e6", padding: "12px", borderRadius: "8px" }}>
+                          {selectedAction.galleyAuthorResponse}
+                        </p>
+                      </>
+                    )}
+                    {selectedAction.galleyFinalFile && (
+                      <>
+                        <p><strong>Your Previously Uploaded File:</strong></p>
+                        <button
+                          style={{ ...styles.buttonSecondary, marginBottom: "12px" }}
+                          onClick={() => downloadFile(selectedAction.galleyFinalFile, `FinalFile_${selectedAction.manuscriptId}`)}
+                        >
+                          <Download size={16} style={{ marginRight: 6 }} />
+                          Download Your Final File
+                        </button>
+                      </>
+                    )}
+
                     <div style={{ marginTop: "20px" }}>
                       <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                        Your Response / Comments:
+                        Your Response / Comments :
                       </label>
                       <textarea
                         value={galleyComment}
                         onChange={(e) => setGalleyComment(e.target.value)}
-                        placeholder="Add any comments here (required if requesting changes)..."
+                        placeholder="Add your response or any changes made..."
                         rows={4}
                         style={{
                           width: "100%",
@@ -703,7 +865,7 @@ const AuthorDashboard = () => {
 
                     <div style={{ marginTop: "20px" }}>
                       <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                        Upload Final Manuscript (optional):
+                        Upload Itemized Corrections/Comments:
                       </label>
                       <input
                         type="file"
@@ -727,10 +889,62 @@ const AuthorDashboard = () => {
                   </>
                 ) : (
                   <>
-                    <p><strong>Amount Due:</strong> ${selectedAction.paymentAmount}</p>
+                    <p><strong>Amount Due:</strong> ₦{selectedAction.paymentAmount}</p>
+                    {selectedAction.paymentAmountUsd && (
+                      <p><strong>Amount (USD):</strong> ${selectedAction.paymentAmountUsd}</p>
+                    )}
                     <p><strong>Status:</strong> {selectedAction.paymentStatus}</p>
+                    
+                    {selectedAction.paymentInstructions && (
+                      <>
+                        <p><strong>Payment Instructions:</strong></p>
+                        <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px", whiteSpace: "pre-wrap" }}>
+                          {formatWithLinks(selectedAction.paymentInstructions)}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Show existing payment proof if any */}
+                    {selectedAction.paymentProof && (
+                      <>
+                        <p><strong>Your Uploaded Payment Proof:</strong></p>
+                        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                          <button
+                            style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: "6px" }}
+                            onClick={() => downloadFile(selectedAction.paymentProof, `payment_proof_${selectedAction.manuscriptId}`)}
+                          >
+                            <Download size={16} /> Download Proof
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    <div style={{ marginTop: "20px" }}>
+                      <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
+                        Upload Payment Proof (receipt/screenshot):
+                      </label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
+                        style={{ marginBottom: "8px" }}
+                      />
+                      {paymentProofFile && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px", borderRadius: "8px" }}>
+                          <FileText size={16} />
+                          <span>{paymentProofFile.name}</span>
+                          <button
+                            onClick={() => setPaymentProofFile(null)}
+                            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <p style={{ marginTop: 16 }}>
-                      Please complete the payment to proceed with publication.
+                      After completing the payment, upload proof and click the button below to notify the editorial team.
                     </p>
                   </>
                 )}
@@ -741,29 +955,20 @@ const AuthorDashboard = () => {
                   Cancel
                 </button>
                 {selectedAction.actionType === "galley" ? (
-                  <>
-                    <button
-                      style={{ ...styles.buttonSecondary, borderColor: "#dc2626", color: "#dc2626" }}
-                      onClick={() => handleGalleyProofAction("reject")}
-                      disabled={processing}
-                    >
-                      Request Changes
-                    </button>
-                    <button
-                      style={styles.buttonPrimary}
-                      onClick={() => handleGalleyProofAction("approve")}
-                      disabled={processing}
-                    >
-                      Approve
-                    </button>
-                  </>
+                  <button
+                    style={styles.buttonPrimary}
+                    onClick={handleGalleyProofSubmit}
+                    disabled={processing}
+                  >
+                    {processing ? "Submitting..." : <><Upload size={16} style={{ marginRight: 6 }} /> Submit Response</>}
+                  </button>
                 ) : (
                   <button
                     style={styles.buttonPrimary}
-                    onClick={handlePayment}
+                    onClick={handlePaymentMade}
                     disabled={processing}
                   >
-                    Proceed to Payment
+                    {processing ? "Notifying..." : "Payment Made"}
                   </button>
                 )}
               </div>
@@ -773,12 +978,6 @@ const AuthorDashboard = () => {
       </div>
     </>
   );
-};
-
-const btnRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
 };
 
 export default AuthorDashboard;

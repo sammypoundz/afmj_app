@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Bell, Menu } from "lucide-react";
 import { eicMenu } from "./EICSidebar";
 
-// Logo URLs (same as reviewer/author)
+// Logo URLs
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
 const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
@@ -21,10 +21,8 @@ const labelToApiKey: Record<string, string> = {
   "Reviewers": "reviewers",
   "Editors": "editors",
   "Authors": "authors"
-  // Notifications do not have an API key yet
 };
 
-// Only these labels will show a counter badge
 const attentionLabels = new Set([
   "New Submissions",
   "Under Review",
@@ -38,7 +36,6 @@ const attentionLabels = new Set([
 
 const API_BASE = "https://afmjonline.com/api/EICcountersAPI.php";
 
-// Build menu with Notifications added (as before)
 const buildMenu = () => {
   const menu = eicMenu.map(section => ({
     ...section,
@@ -68,9 +65,6 @@ const Sidebar: FC = () => {
   const location = useLocation();
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const menu = buildMenu(); // build once per render
-
-  // Fetch counters on mount and every 30 seconds
   useEffect(() => {
     const fetchCounts = async () => {
       try {
@@ -90,7 +84,6 @@ const Sidebar: FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (mobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
@@ -106,7 +99,6 @@ const Sidebar: FC = () => {
     if (window.innerWidth < 768) setMobileOpen(false);
   };
 
-  // Responsive CSS
   const responsiveStyles = `
     @media (max-width: 767px) {
       .eic-sidebar {
@@ -187,7 +179,6 @@ const Sidebar: FC = () => {
     <>
       <style>{responsiveStyles}</style>
 
-      {/* Mobile menu button */}
       <button
         className="mobile-menu-btn"
         onClick={() => setMobileOpen(!mobileOpen)}
@@ -209,7 +200,6 @@ const Sidebar: FC = () => {
           transition: "width 0.2s ease, transform 0.3s ease",
         }}
       >
-        {/* Header with logo and collapse button */}
         <div className="sidebar-header">
           <div
             style={{
@@ -264,8 +254,7 @@ const Sidebar: FC = () => {
           </div>
         </div>
 
-        {/* Menu */}
-        {menu.map((group) => (
+        {buildMenu().map((group) => (
           <div key={group.section} className="menu-group">
             {!collapsed && (
               <p
@@ -298,9 +287,14 @@ const Sidebar: FC = () => {
 
               /* Publications */
               else if (group.section === "Publications") {
-                if (item.label === "Published") path = "/eic/publications/published";
-                else if (item.label === "Publication Decision") path = "/eic/publications/decision";
-                else if (item.label === "Journal Issues") path = "/eic/publications/issues";
+                if (item.label === "Published") {
+                  // ✅ FIX: Use manuscripts view instead of separate Published component
+                  path = "/eic/manuscripts/published";
+                } else if (item.label === "Publication Decision") {
+                  path = "/eic/publications/decision";
+                } else if (item.label === "Journal Issues") {
+                  path = "/eic/publications/issues";
+                }
               }
 
               /* Users */
@@ -318,14 +312,9 @@ const Sidebar: FC = () => {
                 else if (item.label === "Settings") path = "/eic/settings";
               }
 
-              // Get count from API response
               const apiKey = labelToApiKey[item.label];
               const count = apiKey ? (counts[apiKey] || 0) : 0;
-
-              // Show badge for attention items
               const showBadge = attentionLabels.has(item.label) && count > 0;
-
-              // Active state
               const isActive = location.pathname === path;
 
               return (

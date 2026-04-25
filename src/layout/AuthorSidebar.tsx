@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
@@ -10,10 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  History,
+  CreditCard,
 } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
 
-// Images (same as used in ReviewerSidebar)
+// Images
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
 const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
@@ -27,6 +28,8 @@ const authorMenu = [
       { label: "Submit Manuscript", icon: UploadCloud, path: "/author/submit" },
       { label: "Revisions", icon: RefreshCcw, path: "/author/revisions" },
       { label: "Published", icon: BookOpen, path: "/author/published" },
+      { label: "Galley History", icon: History, path: "/author/galley-history" },
+      { label: "Payment History", icon: CreditCard, path: "/author/payment-history" },
     ],
   },
   {
@@ -43,7 +46,6 @@ const AuthorSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Close mobile menu when clicking outside (optional)
   const sidebarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -171,7 +173,6 @@ const AuthorSidebar = () => {
             }}
           >
             {!collapsed ? (
-              // Expanded state: show full logo + collapse button
               <>
                 <img
                   src={LOGO_URL}
@@ -192,7 +193,6 @@ const AuthorSidebar = () => {
                 </button>
               </>
             ) : (
-              // Collapsed state: show favicon + expand button inline
               <>
                 <img
                   src={FAVICON_URL}
@@ -208,9 +208,7 @@ const AuthorSidebar = () => {
                   className="collapse-btn"
                   onClick={() => setCollapsed(false)}
                   aria-label="Expand sidebar"
-                  style={{
-                    marginLeft: "8px",
-                  }}
+                  style={{ marginLeft: "8px" }}
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -238,7 +236,7 @@ const AuthorSidebar = () => {
 
             {group.items.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname.startsWith(item.path);
+              const isActive = location.pathname === item.path;
 
               return (
                 <div
@@ -266,8 +264,6 @@ const AuthorSidebar = () => {
                     <Icon size={20} />
                     {!collapsed && <span>{item.label}</span>}
                   </div>
-
-                  {/* Optional badge: you can add counts later if needed */}
                 </div>
               );
             })}

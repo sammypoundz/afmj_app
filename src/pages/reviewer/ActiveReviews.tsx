@@ -13,6 +13,7 @@ import {
   Download,
   BarChart,
   FlaskConical,
+  Paperclip,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -24,6 +25,11 @@ interface ActiveReview {
   manuscriptId: string;
   title: string;
   dueDate: string;
+}
+
+interface AdditionalFile {
+  path: string;
+  purpose: string | null;
 }
 
 interface ManuscriptPreview {
@@ -39,6 +45,7 @@ interface ManuscriptPreview {
   study_type: string;
   author_name: string;
   file_path?: string;
+  additional_reviewer_files?: AdditionalFile[];
 }
 
 const Spinner = ({ size = 20, color = "#16a34a" }) => (
@@ -81,9 +88,9 @@ const ReviewerActiveReviews = () => {
   const [selectedReview, setSelectedReview] = useState<ActiveReview | null>(null);
   const [previewData, setPreviewData] = useState<ManuscriptPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [downloadingFile, setDownloadingFile] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { authFetch, sessionId } = useAuth(); // removed downloadFile
+  const { authFetch, sessionId } = useAuth();
 
   const fetchActiveReviews = async () => {
     if (!sessionId) {
@@ -101,7 +108,16 @@ const ReviewerActiveReviews = () => {
         throw new Error(`Failed to fetch active reviews: ${res.status}`);
       }
       const data = await res.json();
-      setReviews(data);
+      // Sort reviews by dueDate descending (latest first)
+      const sortedReviews = [...data].sort((a, b) => {
+        const dateA = new Date(a.dueDate);
+        const dateB = new Date(b.dueDate);
+        // If invalid dates, treat as old (fallback)
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        return dateB.getTime() - dateA.getTime();
+      });
+      setReviews(sortedReviews);
     } catch (err) {
       console.error("Error fetching active reviews:", err);
     } finally {
@@ -152,19 +168,11 @@ const ReviewerActiveReviews = () => {
     });
   };
 
-  // ✅ Updated download function with custom filename
-  const handleDownload = async (filePath: string) => {
-    if (!selectedReview) return;
+  const handleDownload = async (filePath: string, customFileName: string) => {
+    if (!filePath) return;
 
-    setDownloadingFile(true);
+    setDownloadingFile(customFileName);
     try {
-      // Extract original file extension
-      const extension = filePath.split('.').pop() || '';
-      // Build custom filename: AFMJ_<manuscript_id>.<extension>
-      const manuscriptId = selectedReview.manuscript_id || parseInt(selectedReview.manuscriptId);
-      const customFileName = `AFMJ_${manuscriptId}${extension ? '.' + extension : ''}`;
-
-      // Fetch the file with authentication
       const response = await authFetch(`https://afmjonline.com/api/download.php?file=${encodeURIComponent(filePath)}`);
 
       if (!response.ok) {
@@ -173,22 +181,18 @@ const ReviewerActiveReviews = () => {
 
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-
-      // Create a temporary link and trigger download
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = customFileName;  // 👈 forces the custom name
+      link.download = customFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      // Clean up
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Download failed:", error);
       alert("Failed to download the file. Please try again.");
     } finally {
-      setDownloadingFile(false);
+      setDownloadingFile(null);
     }
   };
 
@@ -423,12 +427,17 @@ const ReviewerActiveReviews = () => {
                     </div>
                   </div>
 
-                  {/* Download button */}
+                  {/* Main Manuscript Download */}
                   {previewData.file_path && (
                     <div style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
                       <button
-                        onClick={() => handleDownload(previewData.file_path!)}
-                        disabled={downloadingFile}
+                        onClick={() => {
+                          const manuscriptId = selectedReview.manuscript_id || parseInt(selectedReview.manuscriptId);
+                          const extension = previewData.file_path!.split('.').pop() || '';
+                          const fileName = `AFMJ_${manuscriptId}${extension ? '.' + extension : ''}`;
+                          handleDownload(previewData.file_path!, fileName);
+                        }}
+                        disabled={downloadingFile === "main"}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -442,19 +451,63 @@ const ReviewerActiveReviews = () => {
                           fontWeight: 500,
                           border: "1px solid #e5e7eb",
                           transition: "background 0.2s",
-                          cursor: downloadingFile ? "not-allowed" : "pointer",
-                          opacity: downloadingFile ? 0.6 : 1,
+                          cursor: downloadingFile === "main" ? "not-allowed" : "pointer",
+                          opacity: downloadingFile === "main" ? 0.6 : 1,
                         }}
-                        onMouseEnter={(e) => !downloadingFile && (e.currentTarget.style.background = "#e5e7eb")}
-                        onMouseLeave={(e) => !downloadingFile && (e.currentTarget.style.background = "#f3f4f6")}
+                        onMouseEnter={(e) => downloadingFile !== "main" && (e.currentTarget.style.background = "#e5e7eb")}
+                        onMouseLeave={(e) => downloadingFile !== "main" && (e.currentTarget.style.background = "#f3f4f6")}
                       >
-                        {downloadingFile ? <Spinner size={16} /> : <Download size={18} />}
-                        {downloadingFile ? "Downloading..." : "Download Manuscript"}
+                        {downloadingFile === "main" ? <Spinner size={16} /> : <Download size={18} />}
+                        {downloadingFile === "main" ? "Downloading..." : "Download Manuscript"}
                       </button>
                     </div>
                   )}
 
-                  {/* Rest of the manuscript details unchanged */}
+                  {/* Additional Documents Section */}
+                  {previewData.additional_reviewer_files && previewData.additional_reviewer_files.length > 0 && (
+                    <div style={{ marginTop: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                        <Paperclip size={18} color="#16a34a" />
+                        <span style={{ fontWeight: 600, color: "#16a34a" }}>Additional Documents</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {previewData.additional_reviewer_files.map((file, idx) => {
+                          const fileName = file.path.split('/').pop() || `document_${idx+1}`;
+                          const downloadKey = `additional_${idx}`;
+                          return (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f9fafb", padding: "8px 12px", borderRadius: "8px" }}>
+                              <div>
+                                <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>{fileName}</span>
+                                {file.purpose && (
+                                  <span style={{ fontSize: "0.75rem", color: "#6b7280", marginLeft: "8px" }}>({file.purpose})</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleDownload(file.path, `AFMJ_${selectedReview.manuscript_id}_${fileName}`)}
+                                disabled={downloadingFile === downloadKey}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  padding: "6px 12px",
+                                  background: "#fff",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "6px",
+                                  cursor: downloadingFile === downloadKey ? "not-allowed" : "pointer",
+                                  fontSize: "0.8rem",
+                                }}
+                              >
+                                {downloadingFile === downloadKey ? <Spinner size={14} /> : <Download size={14} />}
+                                Download
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rest of the manuscript details (abstract, background, etc.) unchanged */}
                   <h4 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#111827", margin: "8px 0 4px" }}>
                     {previewData.title}
                   </h4>

@@ -1,7 +1,7 @@
 import { type FC, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, FileText, CheckCircle, RotateCcw, AlertTriangle } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
+import { X, FileText, CheckCircle, RotateCcw, AlertTriangle, Download, Paperclip } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 const API = "/api/reviewerApi.php";
 
@@ -24,6 +24,11 @@ interface RevisionItem {
   authorName: string;
 }
 
+interface AdditionalFile {
+  path: string;
+  purpose: string | null;
+}
+
 const Spinner = () => (
   <span style={{ display: "inline-block", width: "16px", height: "16px", border: "2px solid #ccc", borderTopColor: "#0d6efd", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
 );
@@ -36,7 +41,7 @@ const globalStyle = `
 
 const ReviewerRevisions: FC = () => {
   const navigate = useNavigate();
-  const { authFetch, sessionId } = useAuth(); // get authenticated fetch and sessionId
+  const { authFetch, sessionId } = useAuth();
 
   const [revisions, setRevisions] = useState<RevisionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +50,9 @@ const ReviewerRevisions: FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [approveSubmitting, setApproveSubmitting] = useState(false);
   const [concernSubmitting, setConcernSubmitting] = useState(false);
+  const [additionalFiles, setAdditionalFiles] = useState<AdditionalFile[]>([]);
+  const [loadingAdditional, setLoadingAdditional] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   const fetchRevisions = async () => {
     if (!sessionId) {
@@ -58,9 +66,7 @@ const ReviewerRevisions: FC = () => {
     try {
       const res = await authFetch(`${API}?action=listRevisions`);
       if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Session expired. Please log in again.");
-        }
+        if (res.status === 401) throw new Error("Session expired. Please log in again.");
         throw new Error(`HTTP error ${res.status}`);
       }
       const data = await res.json();
@@ -74,18 +80,34 @@ const ReviewerRevisions: FC = () => {
   };
 
   useEffect(() => {
-    if (sessionId) {
-      fetchRevisions();
-    } else {
+    if (sessionId) fetchRevisions();
+    else {
       setLoading(false);
       setError("Please log in to view revisions.");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]); // refetch when session changes
+  }, [sessionId]);
 
-  const handleReviewClick = (rev: RevisionItem) => {
+  const handleReviewClick = async (rev: RevisionItem) => {
     setSelectedRevision(rev);
     setModalOpen(true);
+    setAdditionalFiles([]);
+    setLoadingAdditional(true);
+    try {
+      // Fetch manuscript preview to get additional files
+      const res = await authFetch(`${API}?action=getManuscriptPreviewByManuscriptId&manuscript_id=${rev.manuscript_id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.additional_reviewer_files && Array.isArray(data.additional_reviewer_files)) {
+          setAdditionalFiles(data.additional_reviewer_files);
+        }
+      } else {
+        console.warn("Failed to load additional files for manuscript", rev.manuscript_id);
+      }
+    } catch (err) {
+      console.error("Error loading additional files:", err);
+    } finally {
+      setLoadingAdditional(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -115,7 +137,6 @@ const ReviewerRevisions: FC = () => {
     if (!selectedRevision || !sessionId) return;
     setConcernSubmitting(true);
     try {
-      // 1. Create a new review for this manuscript (auto‑accepted)
       const createRes = await authFetch(`${API}?action=createReviewForManuscript`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +145,6 @@ const ReviewerRevisions: FC = () => {
       const createData = await createRes.json();
       if (!createRes.ok) throw new Error(createData.error || "Failed to create review");
 
-      // 2. Close the modal and navigate to the submission page with the new review ID
       setModalOpen(false);
       navigate(`/reviewer/submit/${createData.review_id}`, {
         state: { fromRevision: true, entryId: selectedRevision.entryId }
@@ -133,6 +153,29 @@ const ReviewerRevisions: FC = () => {
       alert(err.message);
     } finally {
       setConcernSubmitting(false);
+    }
+  };
+
+  const handleDownload = async (filePath: string, fileName: string) => {
+    if (!sessionId) return;
+    setDownloadingFile(fileName);
+    try {
+      const response = await authFetch(`https://afmjonline.com/api/download.php?file=${encodeURIComponent(filePath)}`);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download file. Please try again.");
+    } finally {
+      setDownloadingFile(null);
     }
   };
 
@@ -337,6 +380,53 @@ const ReviewerRevisions: FC = () => {
                   </a>
                 )}
               </div>
+
+              {/* Additional Documents Section */}
+              {loadingAdditional ? (
+                <div style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Spinner /> Loading additional documents...
+                </div>
+              ) : additionalFiles.length > 0 ? (
+                <div style={{ marginBottom: "16px" }}>
+                  <h5 style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Paperclip size={18} /> Additional Documents
+                  </h5>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {additionalFiles.map((file, idx) => {
+                      const fileName = file.path.split('/').pop() || `document_${idx+1}`;
+                      const downloadKey = `additional_${idx}`;
+                      return (
+                        <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f9fafb", padding: "8px 12px", borderRadius: "8px" }}>
+                          <div>
+                            <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>{fileName}</span>
+                            {file.purpose && (
+                              <span style={{ fontSize: "0.75rem", color: "#6b7280", marginLeft: "8px" }}>({file.purpose})</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDownload(file.path, `AFMJ_${selectedRevision.manuscript_id}_${fileName}`)}
+                            disabled={downloadingFile === downloadKey}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "6px 12px",
+                              background: "#fff",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              cursor: downloadingFile === downloadKey ? "not-allowed" : "pointer",
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {downloadingFile === downloadKey ? <Spinner /> : <Download size={14} />}
+                            Download
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               <h5>Manuscript Details</h5>
               <div style={{ marginBottom: "16px" }}>
