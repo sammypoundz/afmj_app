@@ -28,6 +28,16 @@ interface PaymentRecord {
   createdAt: string;
 }
 
+// Helper to format NGN amount
+const formatNgn = (amount: number): string => {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
 const styles = {
   page: {
     padding: "24px",
@@ -108,7 +118,7 @@ const styles = {
       notified: { bg: "#dbeafe", color: "#1e40af", icon: AlertCircle, text: "Notified" },
       failed: { bg: "#fee2e2", color: "#dc2626", icon: XCircle, text: "Failed" },
     };
-    const { bg, color, } = config[status as keyof typeof config] || config.pending;
+    const { bg, color } = config[status as keyof typeof config] || config.pending;
     return {
       background: bg,
       color: color,
@@ -250,7 +260,16 @@ const AuthorPaymentHistory = () => {
     return (
       <div style={styles.page}>
         <div style={{ display: "flex", justifyContent: "center", padding: "50px" }}>
-          <div style={{ width: 40, height: 40, border: "4px solid #16a34a20", borderTop: "4px solid #16a34a", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              border: "4px solid #16a34a20",
+              borderTop: "4px solid #16a34a",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+            }}
+          />
         </div>
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
@@ -305,7 +324,7 @@ const AuthorPaymentHistory = () => {
               <div style={styles.cardBody}>
                 <div style={styles.detailRow}>
                   <span style={styles.label}>Amount</span>
-                  <span style={styles.amount}>${record.amount.toFixed(2)}</span>
+                  <span style={styles.amount}>{formatNgn(record.amount)}</span>
                 </div>
 
                 {record.transactionId && (

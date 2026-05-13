@@ -10,7 +10,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { useAuth } from "../../contexts/AuthContext";
 
 const API_BASE = "https://afmjonline.com/api/authorApi.php";
 
@@ -258,6 +258,7 @@ const AuthorNewSubmission = () => {
     results: "",
     conclusion: "",
     co_authors: "",
+    keywords: "",          // NEW: keywords field
   });
   const [manuscriptFile, setManuscriptFile] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState<File | null>(null);
@@ -300,6 +301,7 @@ const AuthorNewSubmission = () => {
         toast.error("Title is required");
         return;
       }
+      // Keywords are optional – no validation needed
     }
     if (currentStep === 1) {
       if (!formData.abstract.trim()) {
@@ -356,6 +358,7 @@ const AuthorNewSubmission = () => {
     data.append("results", formData.results);
     data.append("conclusion", formData.conclusion);
     data.append("co_authors", formData.co_authors);
+    data.append("keywords", formData.keywords);   // NEW: send keywords
     data.append("manuscript_file", manuscriptFile);
     if (coverLetter) data.append("cover_letter", coverLetter);
 
@@ -421,6 +424,22 @@ const AuthorNewSubmission = () => {
                 <option>Systematic Review</option>
                 <option>Original Research</option>
               </select>
+            </div>
+            {/* NEW: Keywords field */}
+            <div style={styles.fieldGroup}>
+              <label style={styles.label}>Keywords (optional)</label>
+              <input
+                type="text"
+                name="keywords"
+                value={formData.keywords}
+                onChange={handleInputChange}
+                placeholder="e.g., malaria, genomics, drug resistance (separate with commas)"
+                style={styles.input}
+                disabled={loading}
+              />
+              <small style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px" }}>
+                Separate each keyword with a comma.
+              </small>
             </div>
           </>
         );
@@ -596,6 +615,10 @@ const AuthorNewSubmission = () => {
               <div style={styles.previewItem}>
                 <span style={styles.previewLabel}>Section:</span>
                 <span style={styles.previewValue}>{formData.study_type}</span>
+              </div>
+              <div style={styles.previewItem}>
+                <span style={styles.previewLabel}>Keywords:</span>
+                <span style={styles.previewValue}>{formData.keywords || "—"}</span>   {/* NEW */}
               </div>
               <div style={styles.previewItem}>
                 <span style={styles.previewLabel}>Abstract:</span>

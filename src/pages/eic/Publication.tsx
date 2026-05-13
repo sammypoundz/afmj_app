@@ -25,7 +25,6 @@ const Spinner = ({ dark = false }: { dark?: boolean }) => (
   />
 );
 
-// Add global animation style
 const GlobalStyles = () => (
   <style>{`
     @keyframes spin {
@@ -57,6 +56,7 @@ interface Manuscript {
   results?: string;
   conclusion?: string;
   studyType?: string;
+  keywords?: string;   // NEW
 }
 
 const Publication: FC = () => {
@@ -80,7 +80,9 @@ const Publication: FC = () => {
   const [savingPublicationData, setSavingPublicationData] = useState(false);
 
   // Editable fields for the "Awaiting Publication" modal
+  const [editTitle, setEditTitle] = useState("");           // NEW
   const [editAuthors, setEditAuthors] = useState("");
+  const [editKeywords, setEditKeywords] = useState("");     // NEW
   const [editStudyType, setEditStudyType] = useState("");
   const [editAbstract, setEditAbstract] = useState("");
   const [editObjective, setEditObjective] = useState("");
@@ -294,13 +296,14 @@ const Publication: FC = () => {
     }
   };
 
-  // NEW: Save edited publication data (authors, abstract, etc.)
   const savePublicationData = async (manuscript: Manuscript) => {
     setSavingPublicationData(true);
     try {
       const payload = {
         manuscript_id: manuscript.id,
+        title: editTitle,                     // NEW
         authors: editAuthors,
+        keywords: editKeywords,               // NEW
         study_type: editStudyType,
         abstract: editAbstract,
         objective: editObjective,
@@ -316,13 +319,13 @@ const Publication: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save changes");
       toast.success("Publication data updated successfully!");
-      // Refresh the list to show updated data
       await refreshAwaiting();
-      // Update the selected manuscript with the new values
       if (selectedManuscript) {
         setSelectedManuscript({
           ...selectedManuscript,
+          title: editTitle,
           authors: editAuthors,
+          keywords: editKeywords,
           studyType: editStudyType,
           abstract: editAbstract,
           objective: editObjective,
@@ -379,27 +382,18 @@ const Publication: FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
-      toast.update(toastId, {
-        render: "Downloaded successfully",
-        type: "success",
-        isLoading: false,
-        autoClose: 3000,
-      });
+      toast.update(toastId, { render: "Downloaded successfully", type: "success", isLoading: false, autoClose: 3000 });
     } catch (error) {
       console.error("Download failed:", error);
-      toast.update(toastId, {
-        render: "Download failed",
-        type: "error",
-        isLoading: false,
-        autoClose: 3000,
-      });
+      toast.update(toastId, { render: "Download failed", type: "error", isLoading: false, autoClose: 3000 });
     }
   };
 
-  // When the "Prepare Publication" button is clicked, populate the editable fields
   const openAwaitingModal = (m: Manuscript) => {
     setSelectedManuscript(m);
+    setEditTitle(m.title || "");
     setEditAuthors(m.authors || "");
+    setEditKeywords(m.keywords || "");
     setEditStudyType(m.studyType || "");
     setEditAbstract(m.abstract || "");
     setEditObjective(m.objective || "");
@@ -611,7 +605,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* Modal for Assign Payment – Independent NGN and USD fields */}
+      {/* Modal for Assign Payment – unchanged */}
       {selectedManuscript && activeTab === "pending" && (
         <div
           style={{
@@ -726,7 +720,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* Modal for Galley Proof (unchanged) */}
+      {/* Modal for Galley Proof – unchanged */}
       {selectedManuscript && activeTab === "galleyProof" && (
         <div
           style={{
@@ -879,7 +873,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* MODIFIED Modal for Awaiting Publication – now with editable fields */}
+      {/* MODIFIED Modal for Awaiting Publication – now includes Title and Keywords */}
       {selectedManuscript && activeTab === "awaiting" && (
         <div
           style={{
@@ -917,7 +911,23 @@ const Publication: FC = () => {
               You can edit the manuscript metadata below before publishing. Leave blank if not needed.
             </p>
 
-            {/* Editable fields */}
+            {/* NEW: Title input */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Title</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                }}
+                placeholder="Manuscript title"
+              />
+            </div>
+
             <div style={{ marginBottom: "16px" }}>
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Authors</label>
               <input
@@ -931,6 +941,23 @@ const Publication: FC = () => {
                   border: "1px solid #d1d5db",
                 }}
                 placeholder="Enter author names"
+              />
+            </div>
+
+            {/* NEW: Keywords input */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Keywords</label>
+              <input
+                type="text"
+                value={editKeywords}
+                onChange={(e) => setEditKeywords(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                }}
+                placeholder="e.g., malaria, genomics, drug resistance (separate with commas)"
               />
             </div>
 

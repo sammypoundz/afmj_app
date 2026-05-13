@@ -720,7 +720,6 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     }
   };
 
-  // NEW: callback after successful reassignment (emails sent + reviewers assigned)
   const handleReassignSuccess = () => {
     if (!manuscript) return;
     const userConfirmed = window.confirm(
@@ -729,10 +728,8 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     if (userConfirmed) {
       sessionStorage.setItem('reassignOpenModal', 'true');
       sessionStorage.setItem('reassignManuscriptId', manuscript.id.toString());
-      // Navigate to Under Review page (EIC view)
       window.location.href = '/eic/manuscripts/under-review';
     } else {
-      // Just refresh the list and close modal
       onUpdated();
       onClose();
     }
@@ -2174,7 +2171,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  // MODIFIED: added prompt and navigation after successful single reviewer reassign
   const handleReassignReviewer = async (newReviewerId: number) => {
     if (!reassignTarget) return;
     try {
@@ -2193,7 +2189,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
       setManuscript(updated);
       toast.success("Reviewer reassigned successfully.");
 
-      // --- New feature: prompt for updating documents ---
       const userConfirmed = window.confirm(
         'Reassign successful. Do you want to update circulating document or other documents?'
       );
@@ -2202,7 +2197,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
         sessionStorage.setItem('reassignManuscriptId', manuscriptId.toString());
         window.location.href = '/eic/manuscripts/under-review';
       } else {
-        // Just close the reassign modal; the main modal stays open
         setReassignTarget(null);
       }
     } catch (err) {
@@ -2220,7 +2214,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     let defaultBody = "";
     if (decision === "accept") {
       subject = `Acceptance of your manuscript ${formatManuscriptId(manuscript.id)}`;
-      defaultBody = `Dear Author,\n\nCongratulations! Your manuscript "${manuscript.title}" has been accepted for publication in the African Journal of Microbiology. We will now proceed with production.\n\nBest regards,\nEditorial Team`;
+      defaultBody = `Dear Author,\n\nCongratulations! Your manuscript "${manuscript.title}" has been accepted for publication in the African Medical Journal. We will now proceed with production.\n\nBest regards,\nEditorial Team`;
     } else if (decision === "reject") {
       subject = `Decision on your submission ${formatManuscriptId(manuscript.id)}`;
       defaultBody = `Dear Author,\n\nThank you for submitting your manuscript "${manuscript.title}". After careful review, we have decided to reject it.\n\n`;
@@ -2360,7 +2354,6 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleCirculatingUpload = async () => {
     if (!selectedCirculatingFile || !manuscript) return;
     setUploadingCirculating(true);
@@ -2442,11 +2435,13 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   if (!manuscript) return null;
 
   const reviewerProgress: ReviewerProgress[] = manuscript.reviewerProgress ?? [];
-  const normalizedStatus = manuscript.status?.toString().trim() || "";
-  const isAccepted = normalizedStatus.toLowerCase() === "accepted";
-  const isUnderReview = normalizedStatus.toLowerCase() === "under review";
-  const isNewSubmission = normalizedStatus === "New Submissions";
-  const isPublished = normalizedStatus === "Published";
+  // Normalize status to lower case for consistent comparison
+  const rawStatus = manuscript.status?.toString().trim() || "";
+  const normalizedStatus = rawStatus.toLowerCase();
+  const isAccepted = normalizedStatus === "accepted";
+  const isUnderReview = normalizedStatus === "under review";
+  const isNewSubmission = rawStatus === "New Submissions"; // keep original case for this specific check
+  const isPublished = normalizedStatus === "published";
 
   const handleToggleEditor = (editorId: number) => {
     setTempEditorId(prev => prev === editorId ? null : editorId);
@@ -3386,7 +3381,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
           </div>
         )}
 
-        {!isAccepted && (
+        {/* Decision Buttons - hidden for Rejected and Published manuscripts */}
+        {!isAccepted && normalizedStatus !== 'rejected' && normalizedStatus !== 'published' && (
           <div
             style={{
               marginTop: "24px",
@@ -3631,7 +3627,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   );
 };
 
-/* ================= Page ================= */
+/* ================= Page (ManuscriptCategoryView) ================= */
 const ManuscriptCategoryView: FC = () => {
   const { status } = useParams();
   const navigate = useNavigate();
@@ -3730,7 +3726,6 @@ const ManuscriptCategoryView: FC = () => {
     }
   };
 
-  // NEW: auto-open modal after reassign navigation
   useEffect(() => {
     const shouldOpen = sessionStorage.getItem('reassignOpenModal');
     const manuscriptId = sessionStorage.getItem('reassignManuscriptId');
