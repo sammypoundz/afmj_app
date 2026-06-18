@@ -6,7 +6,7 @@ import { useNotifications } from "./useNotifications";
 import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
 
-const API_BASE = "https://afmjonline.com/api/EICmanusciptsapi.php";
+const API_BASE = "https://vinosschool.com/api/EICmanusciptsapi.php";
 
 const TopBar: FC = () => {
   const navigate = useNavigate();

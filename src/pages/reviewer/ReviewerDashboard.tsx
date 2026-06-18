@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE = "/api/reviewerApi.php";
+// const API_BASE = "/api/reviewerApi.php";
+const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
 
 const ReviewerDashboard = () => {
   const navigate = useNavigate();

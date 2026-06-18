@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setIsLoading(true);
     try {
-      const res = await authFetch('/api/me.php');
+      const res = await authFetch('https://vinosschool.com/api/me.php');
       if (res.ok) {
         const data = await res.json();
         // console.log('debug data:', data);
@@ -157,7 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       // Call logout endpoint with the session ID header
-      await authFetch('/api/logout.php', { method: 'POST' });
+      await authFetch('https://vinosschool.com/api/logout.php', { method: 'POST' });
     } catch (error) {
       console.error('Logout failed', error);
     } finally {

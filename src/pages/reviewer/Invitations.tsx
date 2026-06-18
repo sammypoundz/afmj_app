@@ -12,7 +12,8 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-const API_BASE = "/api/reviewerApi.php";
+// const API_BASE = "/api/reviewerApi.php";
+const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
 
 interface Invitation {
   id: number;

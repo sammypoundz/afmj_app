@@ -4,8 +4,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
 // Use relative path – works with proxy
-const API_LOGIN = '/api/login.php';
-// const API_LOGIN = 'https://afmjonline.com/api/login.php';
+// const API_LOGIN = '/api/login.php';
+const API_LOGIN = 'https://vinosschool.com/api/login.php';
 
 interface LoginFormData {
   email: string;

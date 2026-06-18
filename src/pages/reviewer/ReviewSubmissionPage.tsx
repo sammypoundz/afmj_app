@@ -4,7 +4,8 @@ import toast, { Toaster } from "react-hot-toast";
 import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
-const API_BASE = "/api/reviewerApi.php";
+// const API_BASE = "/api/reviewerApi.php";
+const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
 
 // Spinner component (green theme)
 const Spinner = ({ size = 20, color = "#16a34a" }) => (

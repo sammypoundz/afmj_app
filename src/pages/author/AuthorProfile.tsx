@@ -4,7 +4,7 @@ import { ArrowLeft, Save, User, Mail, Building, Fingerprint } from "lucide-react
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
-const API_BASE = "https://afmjonline.com/api/authorApi.php";
+const API_BASE = "https://vinosschool.com/api/authorApi.php";
 
 interface ProfileData {
   id: number;

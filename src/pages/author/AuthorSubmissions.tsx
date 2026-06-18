@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
 
-const API_BASE = "https://afmjonline.com/api/authorApi.php";
+const API_BASE = "https://vinosschool.com/api/authorApi.php";
 
 interface Submission {
   id: string;            // manuscript slug

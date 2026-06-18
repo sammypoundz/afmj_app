@@ -43,7 +43,7 @@ const Manuscripts: FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("https://afmjonline.com/api/manuscripts.php")
+    fetch("https://vinosschool.com/api/manuscripts.php")
       .then(res => res.json())
       .then(data => {
         setManuscripts(data.data);

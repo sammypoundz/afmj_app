@@ -19,8 +19,8 @@ import {
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE = "https://afmjonline.com/api/authorApi.php";
-const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
+const API_BASE = "https://vinosschool.com/api/authorApi.php";
+const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
 
 interface RevisionHistoryItem {
   revision_number: number;

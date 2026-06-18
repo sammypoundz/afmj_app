@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { X, FileText, CheckCircle, RotateCcw, AlertTriangle, Download, Paperclip } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API = "/api/reviewerApi.php";
+// const API = "/api/reviewerApi.php";
+const API = "https://vinosschool.com/api/reviewerApi.php";
 
 interface RevisionItem {
   entryId: number;
@@ -160,7 +161,7 @@ const ReviewerRevisions: FC = () => {
     if (!sessionId) return;
     setDownloadingFile(fileName);
     try {
-      const response = await authFetch(`https://afmjonline.com/api/download.php?file=${encodeURIComponent(filePath)}`);
+      const response = await authFetch(`https://vinosschool.com/api/download.php?file=${encodeURIComponent(filePath)}`);
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);

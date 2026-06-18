@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://afmjonline.com',
+        target: 'https://vinosschool.com',
         changeOrigin: true,
         // Increase timeout to 60 seconds (default is often 30s)
         timeout: 60000,           // in milliseconds

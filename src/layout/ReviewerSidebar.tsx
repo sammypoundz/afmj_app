@@ -12,7 +12,8 @@ interface DashboardStats {
   overdue: number;
 }
 
-const API_BASE = "/api/reviewerApi.php";
+const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
+// const API_BASE = "/api/reviewerApi.php";
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
 const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 

@@ -4,8 +4,9 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const API = "/api/reviewerApi.php";
-const DOWNLOAD_API = "https://afmjonline.com/api/download.php";
+const API = "https://vinosschool.com/api/reviewerApi.php";
+// const API = "/api/reviewerApi.php";
+const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
 
 interface CompletedItem {
   id: number;
