@@ -2,22 +2,108 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import type { FC } from "react";
 import { Bell, Search, UserCircle, X, Loader, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useNotifications } from "./useNotifications";
 import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
+import toast from "react-hot-toast";
 
 const API_BASE = "https://vinosschool.com/api/EICmanusciptsapi.php";
+const NOTIF_API = "https://vinosschool.com/api/EICnotificationsAPI.php";
+
+interface Notification {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  relatedManuscriptId: number | null;
+  read: boolean;
+  date: string;
+}
 
 const TopBar: FC = () => {
   const navigate = useNavigate();
-  const { unreadCount } = useNotifications();
-  const { logout } = useAuth();
+  const { authFetch, logout } = useAuth();
 
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<{ id: number; title: string; author: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Notifications state
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [lastTicketIds, setLastTicketIds] = useState<Set<number>>(new Set());
+
+  // Fetch notifications from API
+  const fetchNotifications = async () => {
+    try {
+      const res = await authFetch(`${NOTIF_API}?action=list&limit=50`);
+      if (!res.ok) {
+        console.error("Failed to fetch notifications:", res.status);
+        return;
+      }
+      const data = await res.json();
+      console.log("Notifications fetched:", data);
+      setNotifications(data);
+      const unread = data.filter((n: Notification) => !n.read).length;
+      setUnreadCount(unread);
+      return data;
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
+  // Initial fetch and polling
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  // Ticket popup detection
+  useEffect(() => {
+    const unreadTickets = notifications.filter(
+      (n) => !n.read && n.type === "ticket-received"
+    );
+    if (unreadTickets.length === 0) return;
+
+    const newTicketIds = unreadTickets
+      .map((n) => n.id)
+      .filter((id) => !lastTicketIds.has(id));
+
+    if (newTicketIds.length > 0) {
+      toast(
+        (t) => (
+          <div>
+            <strong>📩 New ticket from an author!</strong>
+            <div style={{ marginTop: 6, fontSize: 14 }}>
+              {unreadTickets.length} unread ticket{unreadTickets.length > 1 ? "s" : ""}
+            </div>
+            <button
+              onClick={() => {
+                toast.dismiss(t.id);
+                navigate("/eic/notifications");
+              }}
+              style={{
+                marginTop: 8,
+                background: "#2563eb",
+                color: "#fff",
+                border: "none",
+                padding: "4px 12px",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              View
+            </button>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+      const allIds = new Set(unreadTickets.map((n) => n.id));
+      setLastTicketIds(allIds);
+    }
+  }, [notifications]);
 
   // Debounced search
   const debouncedSearch = useMemo(
@@ -53,7 +139,7 @@ const TopBar: FC = () => {
     return () => debouncedSearch.cancel();
   }, [search, debouncedSearch]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -65,14 +151,8 @@ const TopBar: FC = () => {
   }, []);
 
   const handleSelectManuscript = (id: number) => {
-    navigate(`/manuscripts/${id}`);
+    navigate(`/eic/manuscripts/${id}`);
     setSearch("");
-    setDropdownOpen(false);
-  };
-
-  const clearSearch = () => {
-    setSearch("");
-    setResults([]);
     setDropdownOpen(false);
   };
 
@@ -81,38 +161,24 @@ const TopBar: FC = () => {
     navigate("/login");
   };
 
-  // Responsive styles
+  const clearSearch = () => {
+    setSearch("");
+    setDropdownOpen(false);
+  };
+
   const responsiveStyles = `
     @media (max-width: 767px) {
-      .eic-topbar {
-        padding: 8px 12px !important;
-      }
-      .eic-topbar .title {
-        display: none !important;
-      }
-      .eic-topbar .search-container {
-        flex: 1 !important;
-      }
-      .eic-topbar .search-input {
-        width: 100% !important;
-      }
-      .eic-topbar .user-label {
-        display: none !important;
-      }
-      .eic-topbar .logout-text {
-        display: none !important;
-      }
-      .eic-topbar .center-container {
-        gap: 8px !important;
-      }
+      .eic-topbar { padding: 8px 12px !important; }
+      .eic-topbar .title { display: none !important; }
+      .eic-topbar .search-container { flex: 1 !important; }
+      .eic-topbar .search-input { width: 100% !important; }
+      .eic-topbar .user-label { display: none !important; }
+      .eic-topbar .logout-text { display: none !important; }
+      .eic-topbar .center-container { gap: 8px !important; }
     }
     @media (max-width: 480px) {
-      .eic-topbar .search-input {
-        font-size: 0.85rem !important;
-      }
-      .eic-topbar .center-container {
-        gap: 6px !important;
-      }
+      .eic-topbar .search-input { font-size: 0.85rem !important; }
+      .eic-topbar .center-container { gap: 6px !important; }
     }
   `;
 
@@ -131,7 +197,6 @@ const TopBar: FC = () => {
         }}
       >
         <div className="center-container" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Title */}
           <h1 className="title" style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
             Editor-in-Chief Panel
           </h1>
@@ -211,7 +276,7 @@ const TopBar: FC = () => {
 
           {/* Notifications */}
           <button
-            onClick={() => navigate("/notifications")}
+            onClick={() => navigate("/eic/notifications")}
             style={{
               position: "relative",
               background: "transparent",

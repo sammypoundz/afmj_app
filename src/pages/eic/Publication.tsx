@@ -56,7 +56,7 @@ interface Manuscript {
   results?: string;
   conclusion?: string;
   studyType?: string;
-  keywords?: string;   // NEW
+  keywords?: string;
 }
 
 const Publication: FC = () => {
@@ -80,9 +80,9 @@ const Publication: FC = () => {
   const [savingPublicationData, setSavingPublicationData] = useState(false);
 
   // Editable fields for the "Awaiting Publication" modal
-  const [editTitle, setEditTitle] = useState("");           // NEW
+  const [editTitle, setEditTitle] = useState("");
   const [editAuthors, setEditAuthors] = useState("");
-  const [editKeywords, setEditKeywords] = useState("");     // NEW
+  const [editKeywords, setEditKeywords] = useState("");
   const [editStudyType, setEditStudyType] = useState("");
   const [editAbstract, setEditAbstract] = useState("");
   const [editObjective, setEditObjective] = useState("");
@@ -169,6 +169,7 @@ const Publication: FC = () => {
       const payload = {
         manuscript_id: manuscript.id,
         amount: paymentAmountNgn,
+        amount_usd: paymentAmountUsd,
         instructions: paymentInstructions,
       };
       const res = await fetch(`${API_BASE}?action=assignPayment`, {
@@ -301,9 +302,9 @@ const Publication: FC = () => {
     try {
       const payload = {
         manuscript_id: manuscript.id,
-        title: editTitle,                     // NEW
+        title: editTitle,
         authors: editAuthors,
-        keywords: editKeywords,               // NEW
+        keywords: editKeywords,
         study_type: editStudyType,
         abstract: editAbstract,
         objective: editObjective,
@@ -605,7 +606,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* Modal for Assign Payment – unchanged */}
+      {/* Modal for Assign Payment */}
       {selectedManuscript && activeTab === "pending" && (
         <div
           style={{
@@ -651,7 +652,7 @@ const Publication: FC = () => {
             </label>
 
             <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
-              Amount ($USD) – optional, for your reference only (not sent to author):
+              Amount ($USD) – optional, for your reference only (will be included in author email):
               <input
                 type="number"
                 step="0.01"
@@ -720,7 +721,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* Modal for Galley Proof – unchanged */}
+      {/* Modal for Galley Proof */}
       {selectedManuscript && activeTab === "galleyProof" && (
         <div
           style={{
@@ -766,7 +767,7 @@ const Publication: FC = () => {
             </label>
 
             <label style={{ display: "block", marginBottom: "12px", fontWeight: 500, cursor: "pointer" }}>
-              <Paperclip size={16} /> Attach Document (optional):
+              <Paperclip size={16} /> Attach Document <span style={{ color: "#dc2626" }}>(required)</span>:
               <input
                 type="file"
                 onChange={handleFileChange}
@@ -873,7 +874,7 @@ const Publication: FC = () => {
         </div>
       )}
 
-      {/* MODIFIED Modal for Awaiting Publication – now includes Title and Keywords */}
+      {/* Modal for Awaiting Publication */}
       {selectedManuscript && activeTab === "awaiting" && (
         <div
           style={{
@@ -911,7 +912,6 @@ const Publication: FC = () => {
               You can edit the manuscript metadata below before publishing. Leave blank if not needed.
             </p>
 
-            {/* NEW: Title input */}
             <div style={{ marginBottom: "16px" }}>
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Title</label>
               <input
@@ -944,7 +944,6 @@ const Publication: FC = () => {
               />
             </div>
 
-            {/* NEW: Keywords input */}
             <div style={{ marginBottom: "16px" }}>
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Keywords</label>
               <input
@@ -1062,7 +1061,6 @@ const Publication: FC = () => {
               />
             </div>
 
-            {/* File upload section (unchanged) */}
             <div style={{ marginBottom: "20px", marginTop: "20px", borderTop: "1px solid #e5e7eb", paddingTop: "20px" }}>
               <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
                 Upload Final Publication File (PDF only):

@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
+  Mail,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
@@ -123,10 +124,10 @@ const styles = {
     overflowY: "auto" as const,
     boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
   },
-  modalHeader: (type: "galley" | "payment") => ({
+  modalHeader: (type: "galley" | "payment" | "ticket") => ({
     padding: "20px 24px",
     borderBottom: "1px solid #e2e8f0",
-    background: type === "galley" ? "#dbeafe" : "#fef3c7",
+    background: type === "galley" ? "#dbeafe" : type === "payment" ? "#fef3c7" : "#e0f2fe",
     borderTopLeftRadius: "16px",
     borderTopRightRadius: "16px",
     display: "flex",
@@ -349,6 +350,14 @@ const AuthorDashboard = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
 
+  // Ticket / Contact EIC state
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [ticketSubject, setTicketSubject] = useState("");
+  const [ticketMessage, setTicketMessage] = useState("");
+  const [ticketManuscriptId, setTicketManuscriptId] = useState<number | "">("");
+  const [ticketAttachment, setTicketAttachment] = useState<File | null>(null);
+  const [sendingTicket, setSendingTicket] = useState(false);
+
   // Pagination state for Active Manuscripts
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -403,7 +412,8 @@ const AuthorDashboard = () => {
     setCurrentPage(1);
   }, [manuscripts]);
 
-  const handleOpenManuscript = (id: number) => navigate(`/eic/author/manuscript/${id}`);
+  // Fixed: navigate to author manuscript details
+  const handleOpenManuscript = (id: number) => navigate(`/author/manuscript/${id}`);
 
   const getStatusBadge = (status: string, hasPendingRevision: boolean) => {
     if (hasPendingRevision) {
@@ -441,6 +451,64 @@ const AuthorDashboard = () => {
     setPaymentProofFile(null);
   };
 
+  // Ticket modal handlers
+  const openTicketModal = () => {
+    setTicketModalOpen(true);
+    setTicketSubject("");
+    setTicketMessage("");
+    setTicketManuscriptId("");
+    setTicketAttachment(null);
+  };
+
+  const closeTicketModal = () => {
+    setTicketModalOpen(false);
+    setTicketSubject("");
+    setTicketMessage("");
+    setTicketManuscriptId("");
+    setTicketAttachment(null);
+  };
+
+  const handleSendTicket = async () => {
+    if (!ticketSubject.trim() || !ticketMessage.trim()) {
+      toast.error("Subject and message are required.");
+      return;
+    }
+
+    setSendingTicket(true);
+    const toastId = toast.loading("Sending message...");
+
+    const formData = new FormData();
+    formData.append("subject", ticketSubject);
+    formData.append("message", ticketMessage);
+    if (ticketManuscriptId !== "") {
+      formData.append("manuscript_id", ticketManuscriptId.toString());
+    }
+    if (ticketAttachment) {
+      formData.append("attachment", ticketAttachment);
+    }
+
+    try {
+      const res = await authFetch(`${API_BASE}?action=sendTicket`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        throw new Error(result.error || "Failed to send message.");
+      }
+      toast.success("Your message has been sent to the Editor‑in‑Chief.", { id: toastId });
+      closeTicketModal();
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    } finally {
+      setSendingTicket(false);
+    }
+  };
+
   const downloadFile = async (fileUrl: string | null | undefined, fileName: string) => {
     if (!fileUrl) {
       toast.error("No file available to download");
@@ -474,11 +542,13 @@ const AuthorDashboard = () => {
     }
   };
 
+  // ========== UPDATED: file is now REQUIRED for galley proof reply ==========
   const handleGalleyProofSubmit = async () => {
     if (!selectedAction) return;
 
-    if (!galleyComment.trim() && !selectedFile) {
-      toast.error("Please provide a response or upload a file");
+    // Validate: file is required
+    if (!selectedFile) {
+      toast.error("Please upload your corrected manuscript/file.");
       return;
     }
 
@@ -488,10 +558,8 @@ const AuthorDashboard = () => {
     const formData = new FormData();
     formData.append("manuscript_id", selectedAction.id.toString());
     formData.append("action", "reject");
-    formData.append("comment", galleyComment);
-    if (selectedFile) {
-      formData.append("final_file", selectedFile);
-    }
+    formData.append("comment", galleyComment || ""); // comment is optional
+    formData.append("final_file", selectedFile);
 
     try {
       const res = await authFetch(`${API_BASE}?action=updateGalleyProof`, {
@@ -590,14 +658,14 @@ const AuthorDashboard = () => {
     );
   }
 
-  // Routes exactly matching the sidebar's manuscript paths
+  // Updated KPI data with author-specific routes
   const kpiData = [
-    { icon: FileText, label: "Total Submissions", value: stats?.totalSubmissions ?? 0, path: "/eic/manuscripts/new-submissions" },
-    { icon: Clock, label: "Under Review", value: stats?.underReview ?? 0, path: "/eic/manuscripts/under-review" },
-    { icon: RefreshCcw, label: "Revisions Required", value: stats?.revisionsRequired ?? 0, path: "/eic/manuscripts/revision-requested" },
-    { icon: CheckCircle2, label: "Accepted", value: stats?.accepted ?? 0, path: "/eic/manuscripts/accepted" },
-    { icon: XCircle, label: "Rejected", value: stats?.rejected ?? 0, path: "/eic/manuscripts/rejected" },
-    { icon: BookOpen, label: "Published", value: stats?.published ?? 0, path: "/eic/manuscripts/published" },
+    { icon: FileText, label: "Total Submissions", value: stats?.totalSubmissions ?? 0, path: "/author/submissions" },
+    { icon: Clock, label: "Under Review", value: stats?.underReview ?? 0, path: "/author/submissions?status=under_review" },
+    { icon: RefreshCcw, label: "Revisions Required", value: stats?.revisionsRequired ?? 0, path: "/author/submissions?status=revision_requested" },
+    { icon: CheckCircle2, label: "Accepted", value: stats?.accepted ?? 0, path: "/author/submissions?status=accepted" },
+    { icon: XCircle, label: "Rejected", value: stats?.rejected ?? 0, path: "/author/submissions?status=rejected" },
+    { icon: BookOpen, label: "Published", value: stats?.published ?? 0, path: "/author/submissions?status=published" },
   ];
 
   return (
@@ -687,22 +755,30 @@ const AuthorDashboard = () => {
           })}
         </div>
 
-        {/* Author Actions – keeping as is, but they may need EIC versions if used */}
+        {/* Author Actions - now using author routes */}
         <div style={styles.actionsPanel}>
           <div className="section-title" style={styles.sectionTitle}>Author Actions</div>
           <div className="action-buttons" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link to="/eic/submit" style={{ ...styles.buttonPrimary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+            <Link to="/author/submit" style={{ ...styles.buttonPrimary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <Plus size={16} />
               New Submission
             </Link>
-            <Link to="/eic/submissions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+            <Link to="/author/submissions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <List size={16} />
               View Submissions
             </Link>
-            <Link to="/eic/revisions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+            <Link to="/author/revisions" style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
               <Reply size={16} />
               Respond to Revision
             </Link>
+            {/* New Contact EIC button */}
+            <button
+              onClick={openTicketModal}
+              style={{ ...styles.buttonSecondary, display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Mail size={16} />
+              Contact EIC
+            </button>
           </div>
         </div>
 
@@ -779,7 +855,7 @@ const AuthorDashboard = () => {
           )}
         </div>
 
-        {/* Action Modal */}
+        {/* ========== ACTION MODAL (Galley / Payment) ========== */}
         {modalOpen && selectedAction && (
           <div style={styles.modalOverlay} onClick={closeModal}>
             <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -842,9 +918,10 @@ const AuthorDashboard = () => {
                       </>
                     )}
 
+                    {/* Comment – now optional */}
                     <div style={{ marginTop: "20px" }}>
                       <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                        Your Response / Comments :
+                        Your Response / Comments (optional):
                       </label>
                       <textarea
                         value={galleyComment}
@@ -863,9 +940,10 @@ const AuthorDashboard = () => {
                       />
                     </div>
 
+                    {/* File upload – now REQUIRED */}
                     <div style={{ marginTop: "20px" }}>
                       <label style={{ fontWeight: 500, display: "block", marginBottom: "8px" }}>
-                        Upload Itemized Corrections/Comments:
+                        Upload Itemized Corrections/Comments <span style={{ color: "#dc2626" }}>(required)</span>:
                       </label>
                       <input
                         type="file"
@@ -888,6 +966,7 @@ const AuthorDashboard = () => {
                     </div>
                   </>
                 ) : (
+                  // Payment section – unchanged
                   <>
                     <p><strong>Amount Due:</strong> ₦{selectedAction.paymentAmount}</p>
                     {selectedAction.paymentAmountUsd && (
@@ -955,10 +1034,15 @@ const AuthorDashboard = () => {
                   Cancel
                 </button>
                 {selectedAction.actionType === "galley" ? (
+                  // Submit button is disabled if no file is selected
                   <button
-                    style={styles.buttonPrimary}
+                    style={{
+                      ...styles.buttonPrimary,
+                      opacity: !selectedFile || processing ? 0.6 : 1,
+                      cursor: !selectedFile || processing ? "not-allowed" : "pointer",
+                    }}
                     onClick={handleGalleyProofSubmit}
-                    disabled={processing}
+                    disabled={processing || !selectedFile}
                   >
                     {processing ? "Submitting..." : <><Upload size={16} style={{ marginRight: 6 }} /> Submit Response</>}
                   </button>
@@ -971,6 +1055,126 @@ const AuthorDashboard = () => {
                     {processing ? "Notifying..." : "Payment Made"}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ticket / Contact EIC Modal */}
+        {ticketModalOpen && (
+          <div style={styles.modalOverlay} onClick={closeTicketModal}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader("ticket")}>
+                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Mail size={20} />
+                  Contact Editor‑in‑Chief
+                </h3>
+                <button onClick={closeTicketModal} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={styles.modalBody}>
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>
+                    Subject <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={ticketSubject}
+                    onChange={(e) => setTicketSubject(e.target.value)}
+                    placeholder="Brief subject of your message"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      fontSize: "0.95rem",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>
+                    Manuscript (optional)
+                  </label>
+                  <select
+                    value={ticketManuscriptId}
+                    onChange={(e) => setTicketManuscriptId(e.target.value ? Number(e.target.value) : "")}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      fontSize: "0.95rem",
+                      background: "#fff",
+                    }}
+                  >
+                    <option value="">-- Select a manuscript (optional) --</option>
+                    {manuscripts.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.manuscriptId} - {m.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>
+                    Message <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <textarea
+                    value={ticketMessage}
+                    onChange={(e) => setTicketMessage(e.target.value)}
+                    placeholder="Write your message to the Editor‑in‑Chief..."
+                    rows={5}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      fontSize: "0.95rem",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>
+                    Attachment (optional)
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => setTicketAttachment(e.target.files?.[0] || null)}
+                    style={{ marginBottom: "8px" }}
+                  />
+                  {ticketAttachment && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px", borderRadius: "8px" }}>
+                      <FileText size={16} />
+                      <span>{ticketAttachment.name}</span>
+                      <button
+                        onClick={() => setTicketAttachment(null)}
+                        style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#dc2626" }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button style={styles.buttonSecondary} onClick={closeTicketModal} disabled={sendingTicket}>
+                  Cancel
+                </button>
+                <button
+                  style={styles.buttonPrimary}
+                  onClick={handleSendTicket}
+                  disabled={sendingTicket}
+                >
+                  {sendingTicket ? "Sending..." : "Send Message"}
+                </button>
               </div>
             </div>
           </div>

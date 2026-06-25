@@ -15,8 +15,8 @@ import {
 } from "lucide-react";
 
 // Images
-const LOGO_URL = "https://www.vinosschool.com/pages/user/images/logo.png";
-const FAVICON_URL = "https://www.vinosschool.com/pages/user/images/images%20(2)_1675592375901.jpeg";
+const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
+const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
 // Menu groups and items
 const authorMenu = [

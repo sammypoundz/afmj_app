@@ -5,8 +5,8 @@ import { ChevronLeft, ChevronRight, Bell, Menu } from "lucide-react";
 import { eicMenu } from "./EICSidebar";
 
 // Logo URLs
-const LOGO_URL = "https://www.vinosschool.com/pages/user/images/logo.png";
-const FAVICON_URL = "https://www.vinosschool.com/pages/user/images/images%20(2)_1675592375901.jpeg";
+const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
+const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
 // Mapping from menu label to API response key
 const labelToApiKey: Record<string, string> = {

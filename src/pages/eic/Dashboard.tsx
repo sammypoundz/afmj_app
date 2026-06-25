@@ -83,48 +83,49 @@ const Dashboard = () => {
   if (data.status !== "success")
     return <div className="dashboard">Invalid server response.</div>;
 
+  // ===================== CORRECTED PATHS =====================
   const stats = [
     {
       label: "Total Submissions",
       value: data.kpi.total_submissions ?? 0,
       icon: FileText,
-      path: "/manuscripts",
+      path: "/eic/manuscripts",
     },
     {
       label: "Under Review",
       value: data.kpi.under_review ?? 0,
       icon: Clock,
-      path: "/manuscripts/under-review",
+      path: "/eic/manuscripts/under-review",
     },
     {
       label: "Revisions",
       value: data.kpi.revisions ?? 0,
       icon: FileEdit,
-      path: "/manuscripts/revisions",
+      path: "/eic/manuscripts/revisions",
     },
     {
       label: "Accepted",
       value: data.kpi.accepted ?? 0,
       icon: CheckCircle,
-      path: "/manuscripts/accepted",
+      path: "/eic/manuscripts/accepted",
     },
     {
       label: "Gallery Proof",
       value: data.kpi.gallery_proof ?? 0,
       icon: FileCheck,
-      path: "/manuscripts/gallery-proof",
+      path: "/eic/manuscripts/gallery-proof",
     },
     {
       label: "Rejected",
       value: data.kpi.rejected ?? 0,
       icon: XCircle,
-      path: "/manuscripts/rejected",
+      path: "/eic/manuscripts/rejected",
     },
     {
       label: "Published",
       value: data.kpi.published ?? 0,
       icon: UploadCloud,
-      path: "/published",
+      path: "/eic/publications/published", // matches route "publications/published"
     },
   ];
 
@@ -133,30 +134,52 @@ const Dashboard = () => {
       label: "Authors",
       value: data.users.authors ?? 0,
       icon: Users,
-      path: "/users/authors",
+      path: "/eic/users/authors",
     },
     {
       label: "Reviewers",
       value: data.users.reviewers ?? 0,
       icon: UserCheck,
-      path: "/users/reviewers",
+      path: "/eic/users/reviewers",
     },
     {
       label: "Editors",
       value: data.users.editors ?? 0,
       icon: UserCog,
-      path: "/users/editors",
+      path: "/eic/users/editors",
     },
     {
       label: "Publishers",
       value: data.users.publishers ?? 0,
       icon: Building2,
-      path: "/users/publishers",
+      path: "/eic/users/editors", // no dedicated route; fallback to editors
     },
   ];
 
-  // Responsive styles
+  // Responsive styles with added clickable feedback
   const responsiveStyles = `
+    .dashboard .kpi-modern-card.clickable {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dashboard .kpi-modern-card.clickable:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+    .dashboard .action-list li {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .dashboard .action-list li:hover {
+      background: #f1f5f9;
+    }
+    .dashboard .metric.clickable {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .dashboard .metric.clickable:hover {
+      background: #f1f5f9;
+    }
     @media (max-width: 768px) {
       .dashboard .kpi-modern-grid {
         grid-template-columns: repeat(2, 1fr) !important;
@@ -256,19 +279,19 @@ const Dashboard = () => {
           <div className="panel">
             <h3>Pending Actions</h3>
             <ul className="action-list">
-              <li onClick={() => navigate("/manuscripts/under-review")}>
+              <li onClick={() => navigate("/eic/manuscripts/under-review")}>
                 <AlertCircle size={16} className="danger" />
                 <span>{data.pending.overdue_reviews} reviews overdue</span>
                 <ArrowRight size={16} />
               </li>
-              <li onClick={() => navigate("/manuscripts")}>
+              <li onClick={() => navigate("/eic/manuscripts")}>
                 <Clock size={16} className="warning" />
                 <span>
                   {data.pending.awaiting_assignment} manuscripts awaiting assignment
                 </span>
                 <ArrowRight size={16} />
               </li>
-              <li onClick={() => navigate("/published")}>
+              <li onClick={() => navigate("/eic/publications/published")}>
                 <CheckCircle size={16} className="success" />
                 <span>
                   {data.pending.ready_to_publish} decisions ready for publishing
@@ -282,7 +305,7 @@ const Dashboard = () => {
             <h3>Reviewer Performance</h3>
             <div
               className="metric clickable"
-              onClick={() => navigate("/reviewers/performance")}
+              onClick={() => navigate("/eic/analytics")} // or a more specific route if available
             >
               <Clock size={18} />
               <span>
@@ -293,7 +316,7 @@ const Dashboard = () => {
             </div>
             <div
               className="metric clickable"
-              onClick={() => navigate("/reviewers")}
+              onClick={() => navigate("/eic/users/reviewers")}
             >
               <Users size={18} />
               <span>

@@ -7,6 +7,9 @@ import { useAuth } from '../contexts/AuthContext';
 // const API_LOGIN = '/api/login.php';
 const API_LOGIN = 'https://vinosschool.com/api/login.php';
 
+// ========== LOGO URL ==========
+const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
+
 interface LoginFormData {
   email: string;
   password: string;
@@ -75,10 +78,7 @@ const Login: React.FC = () => {
       const text = await res.text();
       let data: LoginResponse;
       try {
-        // console.log('Raw response:', text);  // 👈 Add this line
         data = JSON.parse(text);
-
-        // console.log(data);
       } catch {
         throw new Error('Invalid server response');
       }
@@ -123,6 +123,15 @@ const Login: React.FC = () => {
   return (
     <div style={styles.container}>
       <form onSubmit={handleSubmit} style={styles.form}>
+        {/* ========== LOGO ========== */}
+        <div style={styles.logoContainer}>
+          <img
+            src={LOGO_URL}
+            alt="AFMJ Logo"
+            style={styles.logo}
+          />
+        </div>
+
         <h2 style={styles.title}>Login to AFMJ</h2>
 
         <div style={styles.inputGroup}>
@@ -165,7 +174,7 @@ const Login: React.FC = () => {
   );
 };
 
-// Styles remain unchanged
+// Styles remain unchanged (logoContainer and logo added)
 const styles: { [key: string]: React.CSSProperties } = {
   container: {
     display: 'flex',
@@ -182,6 +191,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
     width: '100%',
     maxWidth: '400px',
+  },
+  logoContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '16px',
+  },
+  logo: {
+    maxWidth: '200px',
+    maxHeight: '80px',
+    objectFit: 'contain',
   },
   title: {
     fontSize: '1.8rem',

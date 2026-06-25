@@ -1,22 +1,46 @@
+import { useState, useEffect } from "react";
 import { LineChart, PieChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, Pie, Cell } from "recharts";
+import { useAuth } from "../../contexts/AuthContext";
+import toast from "react-hot-toast";
 
 const Analytics = () => {
-
-  const visitsData = [
-    { date: "2026-02-08", visits: 120 },
-    { date: "2026-02-09", visits: 150 },
-    { date: "2026-02-10", visits: 90 },
-    { date: "2026-02-11", visits: 200 },
-    { date: "2026-02-12", visits: 170 },
-  ];
-
-  const engagementData = [
-    { type: "Manuscripts Viewed", value: 350 },
-    { type: "Reviews Submitted", value: 120 },
-    { type: "Comments Posted", value: 45 },
-  ];
+  const { authFetch } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({
+    totalVisits: 0,
+    newUsers: 0,
+    activeAuthors: 0,
+    submissions: 0
+  });
+  const [visitsData, setVisitsData] = useState<{ date: string; visits: number }[]>([]);
+  const [engagementData, setEngagementData] = useState<{ type: string; value: number }[]>([]);
+  const [topAuthors, setTopAuthors] = useState<{ author: string; submissions: number; reviews_completed: number }[]>([]);
 
   const COLORS = ["#16a34a", "#2563eb", "#f59e0b"];
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await authFetch("https://vinosschool.com/api/analyticsApi.php?action=getData");
+        if (!res.ok) throw new Error("Failed to fetch analytics");
+        const data = await res.json();
+        setSummary(data.summary);
+        setVisitsData(data.visitsData);
+        setEngagementData(data.engagementData);
+        setTopAuthors(data.topAuthors);
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not load analytics data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAnalytics();
+  }, [authFetch]);
+
+  if (loading) {
+    return <div className="content" style={{ padding: 16 }}>Loading analytics...</div>;
+  }
 
   return (
     <div className="content" style={{ padding: 16 }}>
@@ -26,22 +50,22 @@ const Analytics = () => {
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 16 }}>
         <div style={{ flex: 1, minWidth: 200, background: "#f3f4f6", padding: 16, borderRadius: 12 }}>
           <h4>Total Visits</h4>
-          <p style={{ fontSize: 24, fontWeight: 600 }}>1,230</p>
+          <p style={{ fontSize: 24, fontWeight: 600 }}>{summary.totalVisits.toLocaleString()}</p>
         </div>
 
         <div style={{ flex: 1, minWidth: 200, background: "#f3f4f6", padding: 16, borderRadius: 12 }}>
-          <h4>New Users</h4>
-          <p style={{ fontSize: 24, fontWeight: 600 }}>87</p>
+          <h4>New Users (30d)</h4>
+          <p style={{ fontSize: 24, fontWeight: 600 }}>{summary.newUsers}</p>
         </div>
 
         <div style={{ flex: 1, minWidth: 200, background: "#f3f4f6", padding: 16, borderRadius: 12 }}>
-          <h4>Active Authors</h4>
-          <p style={{ fontSize: 24, fontWeight: 600 }}>34</p>
+          <h4>Active Authors (30d)</h4>
+          <p style={{ fontSize: 24, fontWeight: 600 }}>{summary.activeAuthors}</p>
         </div>
 
         <div style={{ flex: 1, minWidth: 200, background: "#f3f4f6", padding: 16, borderRadius: 12 }}>
           <h4>Submissions</h4>
-          <p style={{ fontSize: 24, fontWeight: 600 }}>58</p>
+          <p style={{ fontSize: 24, fontWeight: 600 }}>{summary.submissions}</p>
         </div>
       </div>
 
@@ -59,8 +83,7 @@ const Analytics = () => {
             boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
           }}
         >
-          <h4>Visits Over Time</h4>
-
+          <h4>Visits Over Time (Last 7 Days)</h4>
           <LineChart width={400} height={250} data={visitsData}>
             <CartesianGrid stroke="#eee" strokeDasharray="5 5" />
             <XAxis dataKey="date" />
@@ -82,7 +105,6 @@ const Analytics = () => {
           }}
         >
           <h4>User Engagement</h4>
-
           <PieChart width={400} height={250}>
             <Pie
               data={engagementData}
@@ -100,7 +122,6 @@ const Analytics = () => {
                 />
               ))}
             </Pie>
-
             <Tooltip />
             <Legend />
           </PieChart>
@@ -110,7 +131,6 @@ const Analytics = () => {
       {/* Top authors */}
       <div style={{ marginTop: 32 }}>
         <h4>Top Active Authors</h4>
-
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
@@ -119,25 +139,14 @@ const Analytics = () => {
               <th style={{ padding: 8 }}>Reviews Completed</th>
             </tr>
           </thead>
-
           <tbody>
-            <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ padding: 8 }}>Dr. Aisha Bello</td>
-              <td style={{ padding: 8 }}>12</td>
-              <td style={{ padding: 8 }}>5</td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ padding: 8 }}>Dr. Ibrahim Musa</td>
-              <td style={{ padding: 8 }}>9</td>
-              <td style={{ padding: 8 }}>7</td>
-            </tr>
-
-            <tr>
-              <td style={{ padding: 8 }}>Dr. Zainab Lawal</td>
-              <td style={{ padding: 8 }}>7</td>
-              <td style={{ padding: 8 }}>4</td>
-            </tr>
+            {topAuthors.map((author, index) => (
+              <tr key={index} style={{ borderBottom: index < topAuthors.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+                <td style={{ padding: 8 }}>{author.author}</td>
+                <td style={{ padding: 8 }}>{author.submissions}</td>
+                <td style={{ padding: 8 }}>{author.reviews_completed}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

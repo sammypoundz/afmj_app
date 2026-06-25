@@ -8,6 +8,7 @@ import {
   UploadCloud,
   ArrowRight,
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface Manuscript {
   id: number;
@@ -39,25 +40,29 @@ const statusColors: Record<string, string> = {
 
 const Manuscripts: FC = () => {
   const navigate = useNavigate();
+  const { authFetch } = useAuth();
   const [manuscripts, setManuscripts] = useState<Manuscript[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("https://vinosschool.com/api/manuscripts.php")
-      .then(res => res.json())
-      .then(data => {
-        setManuscripts(data.data);
-        setLoading(false);
-      })
-      .catch(err => {
+    const fetchManuscripts = async () => {
+      try {
+        const res = await authFetch("https://vinosschool.com/api/manuscripts.php");
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = await res.json();
+        setManuscripts(data.data || []);
+      } catch (err) {
         console.error("Error fetching manuscripts:", err);
+      } finally {
         setLoading(false);
-      });
-  }, []);
+      }
+    };
+    fetchManuscripts();
+  }, [authFetch]);
 
   if (loading) return <div className="content">Loading manuscripts...</div>;
 
-  const statuses = Array.from(new Set(manuscripts.map(m => m.status)));
+  const statuses = Array.from(new Set(manuscripts.map((m) => m.status)));
   const PREVIEW_COUNT = 3;
 
   const slugify = (status: string) =>
@@ -67,12 +72,12 @@ const Manuscripts: FC = () => {
     <div className="content">
       <h1 className="page-title">Manuscripts Overview</h1>
 
-      {statuses.map(status => {
-        const allItems = manuscripts.filter(m => m.status === status);
+      {statuses.map((status) => {
+        const allItems = manuscripts.filter((m) => m.status === status);
         const previewItems = allItems.slice(0, PREVIEW_COUNT);
         const Icon = statusIcons[status] || FileText;
         const color = statusColors[status] || "#6b7280";
-        const route = `/manuscripts/${slugify(status)}`;
+        const route = `/eic/manuscripts/${slugify(status)}`;
 
         return (
           <section key={status} style={{ marginBottom: "32px" }}>
@@ -107,19 +112,19 @@ const Manuscripts: FC = () => {
 
             <div className="panel">
               <ul className="action-list">
-                {previewItems.map(item => (
+                {previewItems.map((item) => (
                   <li
                     key={item.slug}
                     className="metric clickable"
-                    onClick={() =>
-                      navigate(`${route}/${item.slug}`)
-                    }
+                    // ✅ Navigate to the category view (same as "View All")
+                    onClick={() => navigate(route)}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                       padding: "10px",
                       borderRadius: "8px",
+                      cursor: "pointer",
                     }}
                   >
                     <div style={{ display: "flex", gap: "12px" }}>

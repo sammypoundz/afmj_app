@@ -54,7 +54,7 @@ import AuthorManuscriptDetails from "./pages/author/AuthorManuscriptDetails";
 import AuthorRevisions from "./pages/author/AuthorRevisions";
 import AuthorPublished from "./pages/author/AuthorPublished";
 import AuthorProfile from "./pages/author/AuthorProfile";
-import AuthorGalleyHistory from "./pages/author/AuthorGalleyHistory"; // <-- NEW IMPORT
+import AuthorGalleyHistory from "./pages/author/AuthorGalleyHistory";
 import AuthorPaymentHistory from "./pages/author/AuthorPaymentHistory";
 
 interface ProtectedRouteProps {
@@ -189,7 +189,7 @@ const AppRoutes = () => {
         <Route path="revisions" element={<AuthorRevisions />} />
         <Route path="published" element={<AuthorPublished />} />
         <Route path="profile" element={<AuthorProfile />} />
-        <Route path="galley-history" element={<AuthorGalleyHistory />} /> {/* <-- NEW ROUTE */}
+        <Route path="galley-history" element={<AuthorGalleyHistory />} />
         <Route path="payment-history" element={<AuthorPaymentHistory />} />
       </Route>
 
