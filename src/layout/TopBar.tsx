@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { FC } from "react";
-import { Bell, Search, UserCircle, X, Loader, LogOut } from "lucide-react";
+import { Bell, Search, UserCircle, X, Loader, LogOut, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 
 const API_BASE = "https://vinosschool.com/api/EICmanusciptsapi.php";
 const NOTIF_API = "https://vinosschool.com/api/EICnotificationsAPI.php";
+const VERIFY_API = "https://vinosschool.com/api/verify_status.php";
+const REGISTER_API = "https://vinosschool.com/api/register.php";
 
 interface Notification {
   id: number;
@@ -17,6 +19,11 @@ interface Notification {
   relatedManuscriptId: number | null;
   read: boolean;
   date: string;
+}
+
+interface VerificationStatus {
+  email_verified: boolean;
+  email: string;
 }
 
 const TopBar: FC = () => {
@@ -29,12 +36,40 @@ const TopBar: FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Notifications state
+  // ===== EMAIL VERIFICATION STATE =====
+  const [verification, setVerification] = useState<VerificationStatus | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+  const [resending, setResending] = useState(false);
+
+  // ===== NOTIFICATIONS STATE =====
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastTicketIds, setLastTicketIds] = useState<Set<number>>(new Set());
 
-  // Fetch notifications from API
+  // ===== FETCH VERIFICATION STATUS =====
+  useEffect(() => {
+    const fetchVerification = async () => {
+      try {
+        const res = await authFetch(VERIFY_API);
+        if (res.ok) {
+          const data = await res.json();
+          setVerification({
+            email_verified: data.email_verified,
+            email: data.email,
+          });
+        } else {
+          console.error("Failed to fetch verification status:", res.status);
+        }
+      } catch (err) {
+        console.error("Error fetching verification status:", err);
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
+    fetchVerification();
+  }, [authFetch]);
+
+  // ===== FETCH NOTIFICATIONS =====
   const fetchNotifications = async () => {
     try {
       const res = await authFetch(`${NOTIF_API}?action=list&limit=50`);
@@ -43,7 +78,6 @@ const TopBar: FC = () => {
         return;
       }
       const data = await res.json();
-      console.log("Notifications fetched:", data);
       setNotifications(data);
       const unread = data.filter((n: Notification) => !n.read).length;
       setUnreadCount(unread);
@@ -53,14 +87,13 @@ const TopBar: FC = () => {
     }
   };
 
-  // Initial fetch and polling
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // every 30s
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Ticket popup detection
+  // ===== TICKET POPUP =====
   useEffect(() => {
     const unreadTickets = notifications.filter(
       (n) => !n.read && n.type === "ticket-received"
@@ -105,7 +138,48 @@ const TopBar: FC = () => {
     }
   }, [notifications]);
 
-  // Debounced search
+  // ===== SINGLE ACTION: RESEND OTP & REDIRECT =====
+  const handleResendVerification = async () => {
+    if (!verification?.email) {
+      toast.error("Email address not found.");
+      return;
+    }
+
+    setResending(true);
+    const toastId = toast.loading("Sending verification email...");
+
+    try {
+      const res = await authFetch(`${REGISTER_API}?action=resend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verification.email }),
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid server response");
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to resend verification email");
+      }
+
+      toast.success("A new verification email has been sent.", { id: toastId });
+      
+      // Redirect to verification page
+      navigate("/verify-email");
+    } catch (error: any) {
+      console.error("Resend error:", error);
+      toast.error(error.message, { id: toastId });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // ===== SEARCH DEBOUNCE =====
   const debouncedSearch = useMemo(
     () =>
       debounce(async (query: string) => {
@@ -139,7 +213,6 @@ const TopBar: FC = () => {
     return () => debouncedSearch.cancel();
   }, [search, debouncedSearch]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -180,11 +253,65 @@ const TopBar: FC = () => {
       .eic-topbar .search-input { font-size: 0.85rem !important; }
       .eic-topbar .center-container { gap: 6px !important; }
     }
+    .verification-banner {
+      flex-direction: column !important;
+      text-align: center !important;
+      gap: 8px !important;
+    }
+    .verification-banner .banner-actions {
+      flex-direction: column !important;
+      width: 100% !important;
+    }
   `;
 
   return (
     <>
       <style>{responsiveStyles}</style>
+
+      {/* ===== EMAIL VERIFICATION BANNER – single action ===== */}
+      {!verificationLoading && verification && !verification.email_verified && (
+        <div
+          className="verification-banner"
+          style={{
+            background: "#fef3c7",
+            borderBottom: "2px solid #f59e0b",
+            padding: "10px 20px",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "16px",
+            flexWrap: "wrap",
+            fontSize: "0.95rem",
+            color: "#92400e",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <AlertCircle size={20} />
+            <span>
+              <strong>Email not verified.</strong> Please verify your email to access all features.
+            </span>
+          </div>
+          <div className="banner-actions" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              onClick={handleResendVerification}
+              disabled={resending}
+              style={{
+                background: "#16a34a",
+                color: "#fff",
+                border: "none",
+                padding: "6px 16px",
+                borderRadius: "6px",
+                cursor: resending ? "not-allowed" : "pointer",
+                opacity: resending ? 0.6 : 1,
+                fontWeight: 500,
+              }}
+            >
+              {resending ? "Sending..." : "Resend Verification"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <header
         className="eic-topbar"
         style={{

@@ -4,7 +4,7 @@ const EditorUnderReview = () => {
   return (
     <EditorManuscriptList
       title="Under Review"
-      status="review"
+      status="under_review"
     />
   );
 };

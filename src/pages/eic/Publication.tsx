@@ -10,7 +10,21 @@ const API_BASE = "https://vinosschool.com/api/EICpublicationApi.php";
 const UPLOAD_URL = "https://vinosschool.com/api/upload.php";
 const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
 
-// Spinner component for buttons
+// Default payment instructions template (editable)
+const DEFAULT_PAYMENT_INSTRUCTIONS = `Dear Author,
+
+Congratulations once again on your accepted manuscript. You are required to pay the article processing fees with the details below in order to progress with the publication:
+
+Account Name: MDCAN - FMCA
+Account Number: 1014603854
+Amount: N42,000 OR $30
+
+After making payment, you are required to upload the evidence of payment on your portal.
+
+Kind regards.
+Editorial Team.`;
+
+// Spinner component
 const Spinner = ({ dark = false }: { dark?: boolean }) => (
   <span
     style={{
@@ -57,6 +71,7 @@ interface Manuscript {
   conclusion?: string;
   studyType?: string;
   keywords?: string;
+  galleyProofCreatedAt?: string; // new field
 }
 
 const Publication: FC = () => {
@@ -79,7 +94,6 @@ const Publication: FC = () => {
   const [publicationUploading, setPublicationUploading] = useState(false);
   const [savingPublicationData, setSavingPublicationData] = useState(false);
 
-  // Editable fields for the "Awaiting Publication" modal
   const [editTitle, setEditTitle] = useState("");
   const [editAuthors, setEditAuthors] = useState("");
   const [editKeywords, setEditKeywords] = useState("");
@@ -90,7 +104,6 @@ const Publication: FC = () => {
   const [editResults, setEditResults] = useState("");
   const [editConclusion, setEditConclusion] = useState("");
 
-  // Loading states for various actions
   const [assigningPayment, setAssigningPayment] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<number | null>(null);
   const [submittingForPublication, setSubmittingForPublication] = useState<number | null>(null);
@@ -156,7 +169,7 @@ const Publication: FC = () => {
     setSelectedManuscript(m);
     setPaymentAmountNgn(0);
     setPaymentAmountUsd(0);
-    setPaymentInstructions("");
+    setPaymentInstructions(DEFAULT_PAYMENT_INSTRUCTIONS); // pre‑populate
   };
 
   const handlePaymentAssign = async (manuscript: Manuscript) => {
@@ -401,6 +414,15 @@ const Publication: FC = () => {
     setEditMethods(m.methods || "");
     setEditResults(m.results || "");
     setEditConclusion(m.conclusion || "");
+  };
+
+  // Helper: compute days since galley proof sent
+  const getDaysSinceGalleySent = (createdAt?: string) => {
+    if (!createdAt) return null;
+    const sent = new Date(createdAt);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
   };
 
   const currentList =
@@ -671,11 +693,11 @@ const Publication: FC = () => {
             </label>
 
             <label style={{ display: "block", marginBottom: "12px", fontWeight: 500 }}>
-              Payment Instructions / Letter (include amount, payment link, etc.):
+              Payment Instructions / Letter (you can edit the pre‑filled template):
               <textarea
                 value={paymentInstructions}
                 onChange={(e) => setPaymentInstructions(e.target.value)}
-                rows={5}
+                rows={8}
                 style={{
                   width: "100%",
                   marginTop: "8px",
@@ -685,7 +707,6 @@ const Publication: FC = () => {
                   outline: "none",
                   fontFamily: "inherit",
                 }}
-                placeholder="Example: Please pay ₦50,000 to account 0123456789 (Bank Name) on or before 2025-05-01. Use your manuscript ID as reference."
               />
             </label>
 
@@ -856,19 +877,39 @@ const Publication: FC = () => {
                 {uploading ? "Uploading..." : "Send to Author"}
               </button>
 
-              <button
-                disabled={selectedManuscript.galleyProofStatus !== "awaitingReview" || submittingForPublication === selectedManuscript.id}
-                onClick={() => submitForPublication(selectedManuscript)}
-                style={{
-                  ...buttonStyle,
-                  background: selectedManuscript.galleyProofStatus === "awaitingReview" && submittingForPublication !== selectedManuscript.id ? "#10b981" : "#9ca3af",
-                  color: "#fff",
-                  cursor: selectedManuscript.galleyProofStatus === "awaitingReview" && submittingForPublication !== selectedManuscript.id ? "pointer" : "not-allowed",
-                }}
-              >
-                {submittingForPublication === selectedManuscript.id ? <Spinner /> : <CheckCircle size={16} />}
-                {submittingForPublication === selectedManuscript.id ? "Submitting..." : "Submit for Publication"}
-              </button>
+              {/* Approve button – enabled for withAuthor or awaitingReview */}
+              {(() => {
+                const canApprove = selectedManuscript.galleyProofStatus === "withAuthor" || selectedManuscript.galleyProofStatus === "awaitingReview";
+                const daysSince = getDaysSinceGalleySent(selectedManuscript.galleyProofCreatedAt);
+                const isProcessing = submittingForPublication === selectedManuscript.id;
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    {daysSince !== null && (
+                      <span style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>
+                        {daysSince === 0 ? "Sent today" : `Sent ${daysSince} day${daysSince > 1 ? "s" : ""} ago`}
+                      </span>
+                    )}
+                    <button
+                      disabled={!canApprove || isProcessing}
+                      onClick={() => submitForPublication(selectedManuscript)}
+                      style={{
+                        ...buttonStyle,
+                        background: canApprove && !isProcessing ? "#10b981" : "#9ca3af",
+                        color: "#fff",
+                        cursor: canApprove && !isProcessing ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {isProcessing ? <Spinner /> : <CheckCircle size={16} />}
+                      {isProcessing ? "Submitting..." : "Submit for Publication"}
+                    </button>
+                    {!canApprove && selectedManuscript.galleyProofStatus !== "approved" && (
+                      <span style={{ fontSize: "11px", color: "#dc2626", marginTop: "2px" }}>
+                        (Only for manuscripts sent to author or with author reply)
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
