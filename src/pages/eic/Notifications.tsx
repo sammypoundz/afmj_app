@@ -141,7 +141,6 @@ const Notifications: FC = () => {
     setModalOpen(n);
   };
 
-  // FIXED: accept null and handle it
   const viewManuscript = (id: number | null) => {
     if (!id) return;
     navigate(`/eic/manuscripts/${id}`);
@@ -150,16 +149,33 @@ const Notifications: FC = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Helper to parse ticket description
+  // === UPDATED: parseTicket to extract name and email ===
   const parseTicket = (description: string) => {
     const lines = description.split('\n');
-    let from = '';
+    let display = '';
+    let email: string | null = null;
     let message = description;
+
     if (lines.length > 0 && lines[0].startsWith('From:')) {
-      from = lines[0].replace('From:', '').trim();
+      const fromLine = lines[0].replace('From:', '').trim();
+      // Try to match "Name <email>"
+      const match = fromLine.match(/^(.*?)\s*<([^>]+)>$/);
+      if (match) {
+        display = match[1].trim();          // Full name
+        email = match[2].trim();            // Email
+      } else {
+        // Fallback: just an email (old format)
+        display = fromLine;
+        email = fromLine;
+      }
       message = lines.slice(1).join('\n').trim();
+    } else {
+      // If no "From:" line, treat entire description as message
+      display = '';
+      email = null;
     }
-    return { from, message };
+
+    return { display, email, message };
   };
 
   if (loading) {
@@ -237,34 +253,41 @@ const Notifications: FC = () => {
       {/* Notifications list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {filtered.length === 0 && <div>No notifications.</div>}
-        {filtered.map((n) => (
-          <div
-            key={n.id}
-            onClick={() => handleNotificationClick(n)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: 12,
-              borderRadius: 8,
-              cursor: "pointer",
-              background: n.read ? "#f9fafb" : "#eef2ff",
-              border: "1px solid #e5e7eb",
-              fontSize: 13,
-            }}
-          >
-            <div>{getIcon(n.type)}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>{n.title}</div>
-              <div style={{ color: "#6b7280", fontSize: 12 }}>
-                {n.type === "ticket-received" 
-                  ? parseTicket(n.description).from 
-                  : n.description}
+        {filtered.map((n) => {
+          let descriptionDisplay = n.description;
+          if (n.type === "ticket-received") {
+            const { display } = parseTicket(n.description);
+            descriptionDisplay = display || n.description; // fallback to raw if no name
+          }
+          return (
+            <div
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                borderRadius: 8,
+                cursor: "pointer",
+                background: n.read ? "#f9fafb" : "#eef2ff",
+                border: "1px solid #e5e7eb",
+                fontSize: 13,
+              }}
+            >
+              <div>{getIcon(n.type)}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{n.title}</div>
+                <div style={{ color: "#6b7280", fontSize: 12 }}>
+                  {n.type === "ticket-received"
+                    ? descriptionDisplay
+                    : n.description}
+                </div>
               </div>
+              <div style={{ fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>{n.date}</div>
             </div>
-            <div style={{ fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>{n.date}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal */}
@@ -307,35 +330,50 @@ const Notifications: FC = () => {
             {modalOpen.type === "ticket-received" ? (
               <>
                 {(() => {
-                  const { from, message } = parseTicket(modalOpen.description);
+                  const { display, email, message } = parseTicket(modalOpen.description);
+                  const fromDisplay = display || email || "Unknown";
+                  const fromEmail = email || "";
                   return (
                     <>
                       <div style={{ marginBottom: 8 }}>
-                        <strong>From:</strong> <a href={`mailto:${from}`}>{from}</a>
+                        <strong>From:</strong> {fromDisplay}
+                        {fromEmail && (
+                          <a href={`mailto:${fromEmail}`} style={{ marginLeft: 6, color: "#4f46e5" }}>
+                            ({fromEmail})
+                          </a>
+                        )}
                       </div>
                       <div style={{ marginBottom: 12, whiteSpace: "pre-wrap", background: "#f8fafc", padding: 12, borderRadius: 8 }}>
                         {message}
                       </div>
                       <div style={{ marginBottom: 12, fontSize: 13, color: "#6b7280", borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
-                        <strong>Need to reply?</strong> Please login to your email and reply to <a href={`mailto:${from}`}>{from}</a>.
+                        <strong>Need to reply?</strong> Please login to your email and reply to{" "}
+                        {fromEmail ? (
+                          <a href={`mailto:${fromEmail}`}>{fromEmail}</a>
+                        ) : (
+                          "the author"
+                        )}
+                        .
                       </div>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <a
-                          href={`mailto:${from}?subject=${encodeURIComponent(modalOpen.title)}`}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "8px 16px",
-                            borderRadius: 8,
-                            background: "#4f46e5",
-                            color: "#fff",
-                            textDecoration: "none",
-                            fontSize: 13,
-                          }}
-                        >
-                          <Reply size={16} /> Reply via Email
-                        </a>
+                        {fromEmail && (
+                          <a
+                            href={`mailto:${fromEmail}?subject=${encodeURIComponent(modalOpen.title)}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "8px 16px",
+                              borderRadius: 8,
+                              background: "#4f46e5",
+                              color: "#fff",
+                              textDecoration: "none",
+                              fontSize: 13,
+                            }}
+                          >
+                            <Reply size={16} /> Reply via Email
+                          </a>
+                        )}
                         {modalOpen.relatedManuscriptId && (
                           <button
                             onClick={() => viewManuscript(modalOpen.relatedManuscriptId)}

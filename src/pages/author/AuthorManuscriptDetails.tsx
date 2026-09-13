@@ -35,6 +35,7 @@ interface Manuscript {
   author_response_file: string | null;
   author_name: string;
   editor_name: string | null;
+  feedback_released: boolean | null;
 }
 
 interface Review {
@@ -89,7 +90,6 @@ const AuthorManuscriptDetails = () => {
       }
 
       try {
-        // Fetch manuscript details
         const res = await authFetch(`${API_BASE}?action=getManuscriptDetails&manuscript_id=${id}`);
         if (res.status === 401) {
           setError("Session expired. Please log in again.");
@@ -105,7 +105,6 @@ const AuthorManuscriptDetails = () => {
         setReviews(data.reviews);
         setRevisions(data.revisions);
 
-        // Fetch attachments
         const attachRes = await authFetch(`${API_BASE}?action=getEmailAttachments&manuscript_id=${id}`);
         if (attachRes.ok) {
           const attachData = await attachRes.json();
@@ -130,7 +129,6 @@ const AuthorManuscriptDetails = () => {
       }
       const blob = await response.blob();
 
-      // Determine filename
       let finalFileName = fileName;
       if (!finalFileName) {
         const parts = filePath.split('/');
@@ -203,10 +201,13 @@ const AuthorManuscriptDetails = () => {
   }
 
   const statusBadge = getStatusBadge(manuscript.status);
+  const feedbackReleased = manuscript.feedback_released === true;
   const hasPendingRevision = revisions.some(r => !r.addressed);
-  const showAttachments = (manuscript.status === "rejected" || manuscript.status === "under_review") && attachments.length > 0;
+  const showAttachments = feedbackReleased && attachments.length > 0;
+  const showReviews = feedbackReleased && reviews.length > 0;
+  const showRevisionHistory = feedbackReleased && revisions.length > 0;
+  const showSubmitRevision = feedbackReleased && hasPendingRevision;
 
-  // Spinner style
   const spinnerStyle = {
     width: 14,
     height: 14,
@@ -280,9 +281,9 @@ const AuthorManuscriptDetails = () => {
               <span style={{ background: statusBadge.bg, color: statusBadge.color, padding: "4px 12px", borderRadius: "40px", fontWeight: 500, fontSize: "0.9rem" }}>
                 {statusBadge.label}
               </span>
-              {hasPendingRevision && (
-                <span style={{ background: "#fef9c3", color: "#eab308", padding: "4px 12px", borderRadius: "40px", fontWeight: 500, fontSize: "0.9rem" }}>
-                  Revision Pending
+              {!feedbackReleased && (manuscript.status === "under_review" || manuscript.status === "submitted") && (
+                <span style={{ background: "#fef3c7", color: "#d97706", padding: "4px 12px", borderRadius: "40px", fontWeight: 500, fontSize: "0.8rem" }}>
+                  Feedback Pending
                 </span>
               )}
             </div>
@@ -326,7 +327,7 @@ const AuthorManuscriptDetails = () => {
           )}
         </div>
 
-        {/* Editor Attachments (if any) */}
+        {/* Attachments – only if feedback released */}
         {showAttachments && (
           <div className="panel" style={{ padding: "24px" }}>
             <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "16px", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -373,8 +374,8 @@ const AuthorManuscriptDetails = () => {
           </div>
         )}
 
-        {/* Reviews */}
-        {reviews.length > 0 && (
+        {/* Reviews – only if feedback released */}
+        {showReviews ? (
           <div className="panel" style={{ padding: "24px" }}>
             <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "16px", color: "#0f172a" }}>Reviewer Comments</h3>
             {reviews.map((rev, idx) => (
@@ -401,10 +402,19 @@ const AuthorManuscriptDetails = () => {
               </div>
             ))}
           </div>
+        ) : (
+          (manuscript.status === "under_review" || manuscript.status === "submitted") && (
+            <div className="panel" style={{ padding: "24px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px" }}>
+              <p style={{ color: "#16a34a", margin: 0 }}>
+                <AlertCircle size={18} style={{ display: "inline", marginRight: "8px" }} />
+                Reviewer feedback will be shared once the editorial decision is made.
+              </p>
+            </div>
+          )
         )}
 
-        {/* Revision entries */}
-        {revisions.length > 0 && (
+        {/* Revision History – only if feedback released */}
+        {showRevisionHistory && (
           <div className="panel" style={{ padding: "24px" }}>
             <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "16px", color: "#0f172a" }}>Revision History</h3>
             {revisions.map((rev) => (
@@ -481,8 +491,8 @@ const AuthorManuscriptDetails = () => {
           )}
         </div>
 
-        {/* Revision action button */}
-        {hasPendingRevision && (
+        {/* Submit Revision – only if feedback released and pending */}
+        {showSubmitRevision && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
               className="btn-primary"

@@ -3,7 +3,8 @@ import type { FC } from "react";
 import {
   Users, X, ShieldCheck, ShieldOff, Loader,
   Mail, Building2, Calendar, ChevronLeft, ChevronRight,
-  UserPlus, ChevronsLeft, ChevronsRight, BookOpen, Edit2, Save
+  UserPlus, ChevronsLeft, ChevronsRight, BookOpen, Edit2, Save,
+  Trash2  // ✅ Imported for delete icon
 } from "lucide-react";
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
@@ -158,6 +159,21 @@ const styles = {
     alignItems: "center",
     gap: "6px",
     cursor: "pointer",
+  },
+  // ✅ Added delete button style
+  buttonDelete: {
+    background: "#fee2e2",
+    border: "1px solid #fecaca",
+    color: theme.danger,
+    padding: "8px 16px",
+    borderRadius: "40px",
+    fontWeight: 500,
+    fontSize: "0.9rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    cursor: "pointer",
+    transition: "background 0.2s",
   },
   cardGrid: {
     display: "grid",
@@ -380,6 +396,10 @@ const AllEditors: FC = () => {
     specialization: "",
   });
 
+  // ✅ Delete confirmation state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
   // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -505,6 +525,35 @@ const AllEditors: FC = () => {
     }
   };
 
+  // ✅ Delete functions
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const toastId = toast.loading("Deleting editor...");
+    try {
+      const res = await fetch(`${API_BASE}?action=deleteEditor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteTargetId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast.success("Editor deleted successfully", { id: toastId });
+      setShowDeleteModal(false);
+      setDeleteTargetId(null);
+      if (selected?.id === deleteTargetId) {
+        setSelected(null);
+      }
+      fetchEditors();
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    }
+  };
+
+  const openDeleteModal = (id: number) => {
+    setDeleteTargetId(id);
+    setShowDeleteModal(true);
+  };
+
   const fetchEditorDetails = async (id: number) => {
     try {
       const res = await fetch(`${API_BASE}?action=getEditor&id=${id}`);
@@ -512,7 +561,6 @@ const AllEditors: FC = () => {
       if (!res.ok) throw new Error(data.error || "Failed to fetch details");
       setSelected(data);
       setActionsPage(1);
-      // Initialize edit form with current values
       setEditForm({
         name: data.name,
         affiliation: data.affiliation || "",
@@ -575,7 +623,6 @@ const AllEditors: FC = () => {
     }
   };
 
-  // Save profile edits
   const handleSaveProfile = async () => {
     if (!selected) return;
     const toastId = toast.loading("Saving changes...");
@@ -595,9 +642,7 @@ const AllEditors: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
       toast.success("Profile updated", { id: toastId });
-      // Refresh editor details
       await fetchEditorDetails(selected.id);
-      // Also refresh the main list to reflect changes
       fetchEditors();
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
@@ -625,7 +670,6 @@ const AllEditors: FC = () => {
     setPage(1);
   };
 
-  // Pagination for past actions
   const totalActionsPages = selected ? Math.ceil(selected.pastActions.length / actionsPerPage) : 1;
   const paginatedActions = selected
     ? selected.pastActions.slice((actionsPage - 1) * actionsPerPage, actionsPage * actionsPerPage)
@@ -681,7 +725,6 @@ const AllEditors: FC = () => {
           <option value="inactive">Inactive</option>
         </select>
 
-        {/* Rows per page */}
         <div style={styles.rowsPerPage}>
           <span style={{ fontSize: "0.9rem", color: theme.textSecondary }}>Show:</span>
           <select
@@ -795,6 +838,17 @@ const AllEditors: FC = () => {
                     >
                       {editor.status === "active" ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
                     </button>
+                    {/* ✅ Delete button */}
+                    <button
+                      style={styles.buttonDelete}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        openDeleteModal(editor.id);
+                      }}
+                      title="Delete editor"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -904,6 +958,13 @@ const AllEditors: FC = () => {
               </button>
               <button style={selected.suspended ? styles.buttonPrimary : styles.buttonDanger} onClick={() => suspendEditor(selected.id, selected.suspended)}>
                 {selected.suspended ? "Remove suspension" : "Suspend"}
+              </button>
+              {/* ✅ Delete button in modal action bar */}
+              <button
+                style={styles.buttonDelete}
+                onClick={() => openDeleteModal(selected.id)}
+              >
+                <Trash2 size={14} /> Delete
               </button>
             </div>
 
@@ -1136,6 +1197,49 @@ const AllEditors: FC = () => {
             <div style={styles.modalFooter}>
               <button style={styles.buttonSecondary} onClick={() => setShowAddModal(false)}>Cancel</button>
               <button style={styles.buttonPrimary} onClick={handleAddEditor}>Register</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0 }}>Delete Editor</h3>
+              <button onClick={() => setShowDeleteModal(false)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={{ marginBottom: "16px" }}>
+                Are you sure you want to delete this editor? This action <strong>cannot be undone</strong>.
+              </p>
+              <p style={{ fontSize: "0.9rem", color: theme.textSecondary }}>
+                All associated data (assignments, editorial actions, etc.) will be permanently removed.
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.buttonSecondary} onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              <button
+                style={{
+                  background: theme.danger,
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: "40px",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                }}
+                onClick={confirmDelete}
+              >
+                <Trash2 size={16} /> Delete Permanently
+              </button>
             </div>
           </div>
         </div>

@@ -3,7 +3,8 @@ import type { FC } from "react";
 import {
   Users, X, ShieldCheck, ShieldOff, Loader,
   Mail, Building2, Award, Calendar, ChevronLeft, ChevronRight,
-  UserPlus, ChevronsLeft, ChevronsRight, Edit2, Save
+  UserPlus, ChevronsLeft, ChevronsRight, Edit2, Save,
+  Trash2
 } from "lucide-react";
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
@@ -208,7 +209,8 @@ const styles = {
     textTransform: "uppercase" as const,
     letterSpacing: "0.5px",
   },
-  expertiseTag: {
+  // Renamed to specialtyTag but kept class for styling
+  specialtyTag: {
     background: theme.primaryLight,
     color: theme.primaryDark,
     padding: "4px 10px",
@@ -322,6 +324,20 @@ const styles = {
     resize: "vertical" as const,
     fontFamily: "inherit",
   },
+  buttonDelete: {
+    background: "#fee2e2",
+    border: "1px solid #fecaca",
+    color: theme.danger,
+    padding: "8px 16px",
+    borderRadius: "40px",
+    fontWeight: 500,
+    fontSize: "0.9rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    cursor: "pointer",
+    transition: "background 0.2s",
+  },
 };
 
 // ================= Component =================
@@ -330,7 +346,7 @@ const AllReviewers: FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [expertiseFilter, setExpertiseFilter] = useState("");
+  const [expertiseFilter, setExpertiseFilter] = useState(""); // kept as expertiseFilter for API
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [selected, setSelected] = useState<Reviewer | null>(null);
   const [profileTab, setProfileTab] = useState<"profile" | "reviews">("profile");
@@ -357,13 +373,14 @@ const AllReviewers: FC = () => {
     expertise: "",
   });
 
-  // Pagination for main list
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [limit, setLimit] = useState(10); // rows per page
+  const [limit, setLimit] = useState(10);
 
-  // Pagination for past reviews in modal
   const [reviewsPage, setReviewsPage] = useState(1);
   const reviewsPerPage = 5;
 
@@ -371,7 +388,6 @@ const AllReviewers: FC = () => {
     new Set(reviewers.flatMap((r) => r.expertise))
   );
 
-  // Fetch reviewers
   const fetchReviewers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -404,7 +420,6 @@ const AllReviewers: FC = () => {
     fetchReviewers();
   }, [fetchReviewers]);
 
-  // Debounced search
   const debouncedSearch = useCallback(
     debounce((value: string) => {
       setSearch(value);
@@ -413,7 +428,6 @@ const AllReviewers: FC = () => {
     []
   );
 
-  // Fetch manuscripts for assign modal
   const fetchManuscripts = async () => {
     setLoadingManuscripts(true);
     try {
@@ -482,6 +496,34 @@ const AllReviewers: FC = () => {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const toastId = toast.loading("Deleting reviewer...");
+    try {
+      const res = await fetch(`${API_BASE}?action=deleteReviewer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteTargetId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast.success("Reviewer deleted successfully", { id: toastId });
+      setShowDeleteModal(false);
+      setDeleteTargetId(null);
+      if (selected?.id === deleteTargetId) {
+        setSelected(null);
+      }
+      fetchReviewers();
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    }
+  };
+
+  const openDeleteModal = (id: number) => {
+    setDeleteTargetId(id);
+    setShowDeleteModal(true);
+  };
+
   const fetchReviewerDetails = async (id: number) => {
     try {
       const res = await fetch(`${API_BASE}?action=getReviewer&id=${id}`);
@@ -489,14 +531,13 @@ const AllReviewers: FC = () => {
       if (!res.ok) throw new Error(data.error || "Failed to fetch details");
       setSelected(data);
       setReviewsPage(1);
-      // Initialize edit form with current values
       setEditForm({
         name: data.name,
         affiliation: data.affiliation || "",
         bio: data.bio || "",
         expertise: data.expertise.join(", "),
       });
-      setIsEditing(false); // ensure edit mode is off initially
+      setIsEditing(false);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -552,7 +593,6 @@ const AllReviewers: FC = () => {
     }
   };
 
-  // Save profile edits
   const handleSaveProfile = async () => {
     if (!selected) return;
     const toastId = toast.loading("Saving changes...");
@@ -572,9 +612,7 @@ const AllReviewers: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
       toast.success("Profile updated", { id: toastId });
-      // Refresh reviewer details
       await fetchReviewerDetails(selected.id);
-      // Also refresh the main list to reflect changes
       fetchReviewers();
     } catch (err: any) {
       toast.error(err.message, { id: toastId });
@@ -602,7 +640,6 @@ const AllReviewers: FC = () => {
     setPage(1);
   };
 
-  // Pagination for past reviews in modal
   const totalReviewsPages = selected ? Math.ceil(selected.pastReviews.length / reviewsPerPage) : 1;
   const paginatedReviews = selected
     ? selected.pastReviews.slice((reviewsPage - 1) * reviewsPerPage, reviewsPage * reviewsPerPage)
@@ -640,7 +677,7 @@ const AllReviewers: FC = () => {
             setPage(1);
           }}
         >
-          <option value="">All expertise</option>
+          <option value="">All specialties</option> {/* Changed */}
           {allExpertise.map((ex) => (
             <option key={ex} value={ex}>{ex}</option>
           ))}
@@ -658,7 +695,6 @@ const AllReviewers: FC = () => {
           <option value="inactive">Inactive</option>
         </select>
 
-        {/* Rows per page selector */}
         <div style={styles.rowsPerPage}>
           <span style={{ fontSize: "0.9rem", color: theme.textSecondary }}>Show:</span>
           <select
@@ -728,13 +764,13 @@ const AllReviewers: FC = () => {
                 </div>
 
                 <div style={{ marginBottom: "12px" }}>
-                  <div style={{ fontSize: "0.85rem", color: theme.textSecondary, marginBottom: "6px" }}>Expertise</div>
+                  <div style={{ fontSize: "0.85rem", color: theme.textSecondary, marginBottom: "6px" }}>Specialty</div> {/* Changed */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                     {r.expertise.slice(0, 3).map((ex) => (
-                      <span key={ex} style={styles.expertiseTag}>{ex}</span>
+                      <span key={ex} style={styles.specialtyTag}>{ex}</span>
                     ))}
                     {r.expertise.length > 3 && (
-                      <span style={styles.expertiseTag}>+{r.expertise.length - 3}</span>
+                      <span style={styles.specialtyTag}>+{r.expertise.length - 3}</span>
                     )}
                   </div>
                 </div>
@@ -742,7 +778,7 @@ const AllReviewers: FC = () => {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px" }}>
                   <div style={{ fontSize: "0.85rem", color: theme.textSecondary }}>
                     <Building2 size={14} style={{ display: "inline", marginRight: 4 }} />
-                    {r.affiliation || "No affiliation"}
+                    {r.affiliation || "No institution"} {/* Changed */}
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
                     <button
@@ -763,6 +799,16 @@ const AllReviewers: FC = () => {
                       }}
                     >
                       {r.status === "active" ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
+                    </button>
+                    <button
+                      style={styles.buttonDelete}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeleteModal(r.id);
+                      }}
+                      title="Delete reviewer"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -888,7 +934,7 @@ const AllReviewers: FC = () => {
                     <>
                       <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
                         <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
-                          <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Affiliation</div>
+                          <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Institution</div> {/* Changed */}
                           <div style={{ fontWeight: 500, marginTop: 4 }}>{selected.affiliation || "—"}</div>
                         </div>
                         <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
@@ -913,10 +959,10 @@ const AllReviewers: FC = () => {
                       </div>
 
                       <div style={{ marginBottom: "20px" }}>
-                        <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Expertise</div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "8px" }}>Specialty</div> {/* Changed */}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                           {selected.expertise.map((ex) => (
-                            <span key={ex} style={styles.expertiseTag}>{ex}</span>
+                            <span key={ex} style={styles.specialtyTag}>{ex}</span>
                           ))}
                         </div>
                       </div>
@@ -940,7 +986,7 @@ const AllReviewers: FC = () => {
                         />
                       </div>
                       <div style={{ marginBottom: "20px" }}>
-                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Affiliation</label>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Institution</label> {/* Changed */}
                         <input
                           style={styles.input}
                           value={editForm.affiliation}
@@ -948,7 +994,7 @@ const AllReviewers: FC = () => {
                         />
                       </div>
                       <div style={{ marginBottom: "20px" }}>
-                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Expertise (comma separated)</label>
+                        <label style={{ fontSize: "0.85rem", fontWeight: 500, marginBottom: "4px", display: "block" }}>Specialty (comma separated)</label> {/* Changed */}
                         <input
                           style={styles.input}
                           value={editForm.expertise}
@@ -969,7 +1015,7 @@ const AllReviewers: FC = () => {
                   )}
                 </>
               ) : (
-                // Past Reviews tab (unchanged)
+                // Past Reviews tab
                 <>
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {paginatedReviews.length > 0 ? (
@@ -1031,6 +1077,12 @@ const AllReviewers: FC = () => {
                   >
                     {selected.suspended ? "Remove Suspension" : "Suspend"}
                   </button>
+                  <button
+                    style={styles.buttonDelete}
+                    onClick={() => openDeleteModal(selected.id)}
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
                 </>
               )}
             </div>
@@ -1089,14 +1141,57 @@ const AllReviewers: FC = () => {
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <input style={styles.input} placeholder="Full name *" value={newReviewer.name} onChange={(e) => setNewReviewer({ ...newReviewer, name: e.target.value })} />
                 <input style={styles.input} type="email" placeholder="Email *" value={newReviewer.email} onChange={(e) => setNewReviewer({ ...newReviewer, email: e.target.value })} />
-                <input style={styles.input} placeholder="Affiliation" value={newReviewer.affiliation} onChange={(e) => setNewReviewer({ ...newReviewer, affiliation: e.target.value })} />
-                <input style={styles.input} placeholder="Expertise (comma separated)" value={newReviewer.expertise} onChange={(e) => setNewReviewer({ ...newReviewer, expertise: e.target.value })} />
+                <input style={styles.input} placeholder="Institution" value={newReviewer.affiliation} onChange={(e) => setNewReviewer({ ...newReviewer, affiliation: e.target.value })} /> {/* Changed */}
+                <input style={styles.input} placeholder="Specialty (comma separated)" value={newReviewer.expertise} onChange={(e) => setNewReviewer({ ...newReviewer, expertise: e.target.value })} /> {/* Changed */}
                 <textarea style={{ ...styles.input, minHeight: "100px", resize: "vertical" }} placeholder="Bio" value={newReviewer.bio} onChange={(e) => setNewReviewer({ ...newReviewer, bio: e.target.value })} />
               </div>
             </div>
             <div style={styles.modalFooter}>
               <button style={styles.buttonSecondary} onClick={() => setShowAddModal(false)}>Cancel</button>
               <button style={styles.buttonPrimary} onClick={handleAddReviewer}>Register</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0 }}>Delete Reviewer</h3>
+              <button onClick={() => setShowDeleteModal(false)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={{ marginBottom: "16px" }}>
+                Are you sure you want to delete this reviewer? This action <strong>cannot be undone</strong>.
+              </p>
+              <p style={{ fontSize: "0.9rem", color: theme.textSecondary }}>
+                All associated data (reviews, assignments, etc.) will be permanently removed.
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.buttonSecondary} onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              <button
+                style={{
+                  background: theme.danger,
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: "40px",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                }}
+                onClick={confirmDelete}
+              >
+                <Trash2 size={16} /> Delete Permanently
+              </button>
             </div>
           </div>
         </div>

@@ -3,14 +3,12 @@ import type { FC } from "react";
 import {
   Users, X, ShieldCheck, ShieldOff, Loader,
   Mail, Building2, Calendar, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight
+  ChevronsLeft, ChevronsRight, Trash2
 } from "lucide-react";
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
 
 const API_BASE = "https://vinosschool.com/api/EICUsersApi.php";
-
-// const API_BASE = "/api/EICUsersApi.php";
 
 // ================= Types =================
 interface Submission {
@@ -45,7 +43,7 @@ const theme = {
   success: "#16a34a",
   danger: "#dc2626",
   warning: "#f59e0b",
-  info: "#3b82f6", // Added missing info color
+  info: "#3b82f6",
   cardBg: "#ffffff",
   shadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
   shadowLg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
@@ -143,6 +141,20 @@ const styles = {
     alignItems: "center",
     gap: "6px",
     cursor: "pointer",
+  },
+  buttonDelete: {
+    background: "#fee2e2",
+    border: "1px solid #fecaca",
+    color: theme.danger,
+    padding: "8px 16px",
+    borderRadius: "40px",
+    fontWeight: 500,
+    fontSize: "0.9rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    cursor: "pointer",
+    transition: "background 0.2s",
   },
   cardGrid: {
     display: "grid",
@@ -291,7 +303,6 @@ const styles = {
     borderRadius: "12px",
     padding: "16px",
   },
-  // Added missing actionsPagination
   actionsPagination: {
     display: "flex",
     justifyContent: "center",
@@ -309,6 +320,9 @@ const AllAuthors: FC = () => {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [selected, setSelected] = useState<Author | null>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "submissions">("profile");
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -337,7 +351,6 @@ const AllAuthors: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch authors");
 
-      // Transform API data to match Author interface
       const transformed = data.data.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -423,6 +436,34 @@ const AllAuthors: FC = () => {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const toastId = toast.loading("Deleting author...");
+    try {
+      const res = await fetch(`${API_BASE}?action=deleteAuthor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteTargetId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast.success("Author deleted successfully", { id: toastId });
+      setShowDeleteModal(false);
+      setDeleteTargetId(null);
+      if (selected?.id === deleteTargetId) {
+        setSelected(null);
+      }
+      fetchAuthors();
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId });
+    }
+  };
+
+  const openDeleteModal = (id: number) => {
+    setDeleteTargetId(id);
+    setShowDeleteModal(true);
+  };
+
   const fetchAuthorDetails = async (id: number) => {
     try {
       const res = await fetch(`${API_BASE}?action=getAuthor&id=${id}`);
@@ -444,7 +485,6 @@ const AllAuthors: FC = () => {
     setPage(1);
   };
 
-  // Pagination for submissions
   const totalSubmissionsPages = selected ? Math.ceil(selected.submissions.length / submissionsPerPage) : 1;
   const paginatedSubmissions = selected
     ? selected.submissions.slice((submissionsPage - 1) * submissionsPerPage, submissionsPage * submissionsPerPage)
@@ -483,7 +523,6 @@ const AllAuthors: FC = () => {
           <option value="inactive">Inactive</option>
         </select>
 
-        {/* Rows per page */}
         <div style={styles.rowsPerPage}>
           <span style={{ fontSize: "0.9rem", color: theme.textSecondary }}>Show:</span>
           <select
@@ -555,7 +594,7 @@ const AllAuthors: FC = () => {
                 <div style={{ marginBottom: "12px" }}>
                   <div style={{ fontSize: "0.85rem", color: theme.textSecondary }}>
                     <Building2 size={14} style={{ display: "inline", marginRight: 4 }} />
-                    {author.affiliation || "No affiliation"}
+                    {author.affiliation || "No institution"} {/* Changed */}
                   </div>
                 </div>
 
@@ -569,6 +608,16 @@ const AllAuthors: FC = () => {
                       }}
                     >
                       {author.status === "active" ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
+                    </button>
+                    <button
+                      style={styles.buttonDelete}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        openDeleteModal(author.id);
+                      }}
+                      title="Delete author"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -665,6 +714,12 @@ const AllAuthors: FC = () => {
               <button style={selected.suspended ? styles.buttonPrimary : styles.buttonDanger} onClick={() => suspendAuthor(selected.id, selected.suspended)}>
                 {selected.suspended ? "Remove suspension" : "Suspend"}
               </button>
+              <button
+                style={styles.buttonDelete}
+                onClick={() => openDeleteModal(selected.id)}
+              >
+                <Trash2 size={14} /> Delete
+              </button>
             </div>
 
             {/* Tabs */}
@@ -689,7 +744,7 @@ const AllAuthors: FC = () => {
                 <>
                   <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
                     <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
-                      <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Affiliation</div>
+                      <div style={{ fontSize: "0.8rem", color: theme.textSecondary, textTransform: "uppercase" }}>Institution</div> {/* Changed */}
                       <div style={{ fontWeight: 500, marginTop: 4 }}>{selected.affiliation || "—"}</div>
                     </div>
                     <div style={{ flex: 1, background: theme.grayBg, borderRadius: "12px", padding: "16px" }}>
@@ -772,6 +827,49 @@ const AllAuthors: FC = () => {
 
             <div style={styles.modalFooter}>
               <button style={styles.buttonSecondary} onClick={() => setSelected(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
+          <div style={{ ...styles.modalContent, maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0 }}>Delete Author</h3>
+              <button onClick={() => setShowDeleteModal(false)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={{ marginBottom: "16px" }}>
+                Are you sure you want to delete this author? This action <strong>cannot be undone</strong>.
+              </p>
+              <p style={{ fontSize: "0.9rem", color: theme.textSecondary }}>
+                All associated data (submissions, manuscripts, etc.) will be permanently removed.
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.buttonSecondary} onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              <button
+                style={{
+                  background: theme.danger,
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: "40px",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                }}
+                onClick={confirmDelete}
+              >
+                <Trash2 size={16} /> Delete Permanently
+              </button>
             </div>
           </div>
         </div>

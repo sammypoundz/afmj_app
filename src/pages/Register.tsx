@@ -11,6 +11,7 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
   role: string;
+  specialty: string; // Renamed from expertise
 }
 
 const Register: React.FC = () => {
@@ -21,6 +22,7 @@ const Register: React.FC = () => {
     password: '',
     confirmPassword: '',
     role: 'author',
+    specialty: '',
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<RegisterFormData>>({});
@@ -100,6 +102,11 @@ const Register: React.FC = () => {
 
     if (!formData.role) newErrors.role = 'Please select a role';
 
+    // Specialty validation
+    if (!formData.specialty.trim()) {
+      newErrors.specialty = 'Specialty is required';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -118,12 +125,13 @@ const Register: React.FC = () => {
     }
   };
 
+  // ---- Step 1: Initiate registration (send OTP, DO NOT create user) ----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
-    const toastId = toast.loading('Creating your account...');
+    const toastId = toast.loading('Sending verification code...');
 
     try {
       const payload = {
@@ -131,9 +139,10 @@ const Register: React.FC = () => {
         email: formData.email,
         password: formData.password,
         role: formData.role,
+        specialty: formData.specialty, // send specialty
       };
 
-      const res = await fetch(API_REGISTER + '?action=register', {
+      const res = await fetch(API_REGISTER + '?action=initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -148,22 +157,23 @@ const Register: React.FC = () => {
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.error || 'Failed to send verification code');
       }
 
-      toast.success('Registration successful! Please verify your email.', { id: toastId });
+      toast.success('Verification code sent! Please check your email.', { id: toastId });
       setRegisteredEmail(formData.email);
       setShowOtpScreen(true);
       setOtp('');
       setVerificationError('');
     } catch (error: any) {
-      console.error('Registration error:', error);
+      console.error('Initiation error:', error);
       toast.error(error.message, { id: toastId });
     } finally {
       setLoading(false);
     }
   };
 
+  // ---- Step 2: Verify OTP and complete registration (create user) ----
   const handleVerifyOtp = async () => {
     if (!otp || otp.length < 6) {
       setVerificationError('Please enter a valid 6-digit OTP.');
@@ -172,10 +182,10 @@ const Register: React.FC = () => {
 
     setVerificationLoading(true);
     setVerificationError('');
-    const toastId = toast.loading('Verifying OTP...');
+    const toastId = toast.loading('Verifying code and creating your account...');
 
     try {
-      const res = await fetch(API_REGISTER + '?action=verify', {
+      const res = await fetch(API_REGISTER + '?action=complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: registeredEmail, otp }),
@@ -193,7 +203,7 @@ const Register: React.FC = () => {
         throw new Error(data.error || 'Verification failed');
       }
 
-      toast.success('Account verified! You can now login.', { id: toastId });
+      toast.success('Account created successfully! You can now log in.', { id: toastId });
       setTimeout(() => navigate('/login'), 1500);
     } catch (error: any) {
       console.error('Verification error:', error);
@@ -204,9 +214,10 @@ const Register: React.FC = () => {
     }
   };
 
+  // ---- Resend OTP ----
   const handleResendOtp = async () => {
     setOtpResendLoading(true);
-    const toastId = toast.loading('Resending OTP...');
+    const toastId = toast.loading('Resending verification code...');
 
     try {
       const res = await fetch(API_REGISTER + '?action=resend', {
@@ -224,10 +235,10 @@ const Register: React.FC = () => {
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to resend OTP');
+        throw new Error(data.error || 'Failed to resend code');
       }
 
-      toast.success('A new OTP has been sent to your email.', { id: toastId });
+      toast.success('A new code has been sent to your email.', { id: toastId });
       setVerificationError('');
     } catch (error: any) {
       console.error('Resend error:', error);
@@ -237,11 +248,12 @@ const Register: React.FC = () => {
     }
   };
 
+  // ---- Render OTP Screen ----
   const renderOtpScreen = () => (
     <div style={styles.formCard}>
       <h2 style={styles.formTitle}>Verify Your Email</h2>
       <p style={styles.formSubtitle}>
-        We've sent a 6‑digit OTP to <strong>{registeredEmail}</strong>. 
+        We've sent a 6‑digit OTP to <strong>{registeredEmail}</strong>.
         Please enter it below to complete your registration.
       </p>
 
@@ -274,7 +286,7 @@ const Register: React.FC = () => {
           }}
           disabled={verificationLoading || otpResendLoading}
         >
-          {verificationLoading ? 'Verifying...' : 'Verify OTP'}
+          {verificationLoading ? 'Verifying...' : 'Verify & Create Account'}
         </button>
       </div>
 
@@ -303,6 +315,7 @@ const Register: React.FC = () => {
     </div>
   );
 
+  // ========== RENDER ==========
   return (
     <div style={styles.container}>
       <div style={styles.grid} className="register-grid">
@@ -507,8 +520,29 @@ const Register: React.FC = () => {
                   {errors.role && <span style={styles.error}>{errors.role}</span>}
                 </div>
 
+                {/* Specialty Field */}
+                <div style={styles.inputGroup}>
+                  <label htmlFor="specialty" style={styles.label}>
+                    Specialty <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="specialty"
+                    name="specialty"
+                    value={formData.specialty}
+                    onChange={handleChange}
+                    style={styles.input}
+                    disabled={loading}
+                    placeholder="e.g., Cardiology, Epidemiology, Biostatistics"
+                  />
+                  <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+                    Separate multiple areas with commas.
+                  </small>
+                  {errors.specialty && <span style={styles.error}>{errors.specialty}</span>}
+                </div>
+
                 <button type="submit" style={styles.button} disabled={loading}>
-                  {loading ? 'Creating...' : 'Register'}
+                  {loading ? 'Sending code...' : 'Register'}
                 </button>
 
                 <p style={styles.mobileLogin} className="register-mobile-login">

@@ -114,10 +114,23 @@ const ReviewSubmissionPage = () => {
     }
   };
 
+  // Helper to check if file is .docx
+  const isDocx = (file: File): boolean => {
+    return file.name.toLowerCase().endsWith(".docx");
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setAttachmentFile(e.target.files[0]);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Enforce .docx only
+    if (!isDocx(file)) {
+      toast.error("Only .docx files are allowed for attachments.");
+      e.target.value = ""; // reset input
+      return;
     }
+
+    setAttachmentFile(file);
   };
 
   const validateForm = (): boolean => {
@@ -404,10 +417,11 @@ const ReviewSubmissionPage = () => {
         >
           <h3 style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: 0, marginBottom: "16px", color: "#0f172a" }}>
             <Paperclip size={20} color="#16a34a" />
-            Attachment for Author (Optional)
+            Attachment for Author (Optional) – DOCX only
           </h3>
           <input
             type="file"
+            accept=".docx"
             onChange={handleFileChange}
             disabled={submitting}
             style={{

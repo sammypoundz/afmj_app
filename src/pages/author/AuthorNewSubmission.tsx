@@ -258,7 +258,7 @@ const AuthorNewSubmission = () => {
     results: "",
     conclusion: "",
     co_authors: "",
-    keywords: "",          // NEW: keywords field
+    keywords: "",
   });
   const [manuscriptFile, setManuscriptFile] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState<File | null>(null);
@@ -277,11 +277,26 @@ const AuthorNewSubmission = () => {
     }
   };
 
+  // Validate file extension (case‑insensitive)
+  const isDocx = (file: File): boolean => {
+    return file.name.toLowerCase().endsWith(".docx");
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "manuscript" | "cover") => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (type === "manuscript") setManuscriptFile(file);
-      else setCoverLetter(file);
+    if (!file) return;
+
+    // Enforce .docx only
+    if (!isDocx(file)) {
+      toast.error("Only .docx files are allowed.");
+      e.target.value = ""; // reset input
+      return;
+    }
+
+    if (type === "manuscript") {
+      setManuscriptFile(file);
+    } else {
+      setCoverLetter(file);
     }
   };
 
@@ -301,7 +316,6 @@ const AuthorNewSubmission = () => {
         toast.error("Title is required");
         return;
       }
-      // Keywords are optional – no validation needed
     }
     if (currentStep === 1) {
       if (!formData.abstract.trim()) {
@@ -358,7 +372,7 @@ const AuthorNewSubmission = () => {
     data.append("results", formData.results);
     data.append("conclusion", formData.conclusion);
     data.append("co_authors", formData.co_authors);
-    data.append("keywords", formData.keywords);   // NEW: send keywords
+    data.append("keywords", formData.keywords);
     data.append("manuscript_file", manuscriptFile);
     if (coverLetter) data.append("cover_letter", coverLetter);
 
@@ -423,9 +437,12 @@ const AuthorNewSubmission = () => {
                 <option>Clinical Research</option>
                 <option>Systematic Review</option>
                 <option>Original Research</option>
+                <option>Case Report</option>
+                <option>Case Series</option>
+                <option>Brief Communication</option>
+                <option>Letter to the Editor</option>
               </select>
             </div>
-            {/* NEW: Keywords field */}
             <div style={styles.fieldGroup}>
               <label style={styles.label}>Keywords (optional)</label>
               <input
@@ -527,7 +544,7 @@ const AuthorNewSubmission = () => {
                 type="file"
                 ref={manuscriptInputRef}
                 onChange={(e) => handleFileChange(e, "manuscript")}
-                accept=".pdf,.doc,.docx"
+                accept=".docx"
                 style={{ display: "none" }}
                 disabled={loading}
               />
@@ -538,7 +555,7 @@ const AuthorNewSubmission = () => {
                 >
                   <Upload size={24} color="#94a3b8" />
                   <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-                    Click to upload manuscript (PDF, DOC, DOCX)
+                    Click to upload manuscript (DOCX only)
                   </p>
                 </div>
               ) : (
@@ -561,7 +578,7 @@ const AuthorNewSubmission = () => {
                 type="file"
                 ref={coverInputRef}
                 onChange={(e) => handleFileChange(e, "cover")}
-                accept=".pdf,.doc,.docx,.txt"
+                accept=".docx"
                 style={{ display: "none" }}
                 disabled={loading}
               />
@@ -572,7 +589,7 @@ const AuthorNewSubmission = () => {
                 >
                   <Upload size={24} color="#94a3b8" />
                   <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-                    Click to upload cover letter (optional)
+                    Click to upload cover letter (DOCX only, optional)
                   </p>
                 </div>
               ) : (
@@ -618,7 +635,7 @@ const AuthorNewSubmission = () => {
               </div>
               <div style={styles.previewItem}>
                 <span style={styles.previewLabel}>Keywords:</span>
-                <span style={styles.previewValue}>{formData.keywords || "—"}</span>   {/* NEW */}
+                <span style={styles.previewValue}>{formData.keywords || "—"}</span>
               </div>
               <div style={styles.previewItem}>
                 <span style={styles.previewLabel}>Abstract:</span>

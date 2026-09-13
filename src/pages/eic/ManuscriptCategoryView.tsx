@@ -117,6 +117,7 @@ interface Manuscript {
 interface Reviewer {
   id: number;
   name: string;
+  expertise?: string[];
 }
 
 interface Editor {
@@ -291,7 +292,7 @@ const Pagination: FC<PaginationProps> = ({
   );
 };
 
-/* ================= Enhanced Reviewer Selection Modal ================= */
+/* ================= ReviewerSelectionModal ================= */
 interface ReviewerModalProps {
   reviewers: Reviewer[];
   currentReviewers: string[];
@@ -390,7 +391,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
             gap: "12px",
             marginTop: "16px",
           }}
@@ -416,7 +417,31 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
                 }}
               >
                 <UserCheck size={32} color={isSelected ? "#0d6efd" : "#6b7280"} />
-                <span style={{ marginTop: "8px", fontSize: "0.9rem", textAlign: "center" }}>{r.name}</span>
+                <span style={{ marginTop: "8px", fontSize: "0.9rem", textAlign: "center", fontWeight: 500 }}>
+                  {r.name}
+                </span>
+                {r.expertise && r.expertise.length > 0 && (
+                  <div style={{ marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                    {r.expertise.slice(0, 2).map((exp) => (
+                      <span
+                        key={exp}
+                        style={{
+                          fontSize: "0.6rem",
+                          background: "#e5e7eb",
+                          color: "#374151",
+                          padding: "2px 6px",
+                          borderRadius: "12px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {exp}
+                      </span>
+                    ))}
+                    {r.expertise.length > 2 && (
+                      <span style={{ fontSize: "0.6rem", color: "#6b7280" }}>+{r.expertise.length - 2}</span>
+                    )}
+                  </div>
+                )}
                 {isSelected && <Check size={16} style={{ marginTop: "6px", color: "#0d6efd" }} />}
               </div>
             );
@@ -539,7 +564,7 @@ const ReviewerSelectionModal: FC<ReviewerModalProps> = ({
   );
 };
 
-/* ================= Single Reviewer Modal (for reassign) ================= */
+/* ================= SingleReviewerModal ================= */
 interface SingleReviewerModalProps {
   reviewers: Reviewer[];
   currentReviewerId: number;
@@ -620,7 +645,7 @@ const SingleReviewerModal: FC<SingleReviewerModalProps> = ({
   );
 };
 
-/* ================= Revision History Modal ================= */
+/* ================= RevisionHistoryModal ================= */
 interface RevisionHistoryModalProps {
   manuscriptId: number;
   onClose: () => void;
@@ -728,7 +753,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     if (userConfirmed) {
       sessionStorage.setItem('reassignOpenModal', 'true');
       sessionStorage.setItem('reassignManuscriptId', manuscript.id.toString());
-      window.location.href = '/eic/manuscripts/under-review';
+      window.location.href = '/dev/eic/manuscripts/under-review';
     } else {
       onUpdated();
       onClose();
@@ -1547,7 +1572,7 @@ const ReassignEmailModal: FC<ReassignEmailModalProps> = ({
   );
 };
 
-/* ================= Manuscript File Modal (for Revised category) ================= */
+/* ================= ManuscriptFileModal ================= */
 interface ManuscriptFileModalProps {
   manuscriptId: number;
   title: string;
@@ -1757,7 +1782,7 @@ const ManuscriptFileModal: FC<ManuscriptFileModalProps> = ({
   );
 };
 
-/* ================= EIC File Upload Modal ================= */
+/* ================= EICFileUploadModal ================= */
 interface EICFileUploadModalProps {
   manuscript: Manuscript;
   onClose: () => void;
@@ -2063,7 +2088,7 @@ const EICFileUploadModal: FC<EICFileUploadModalProps> = ({
   );
 };
 
-/* ================= Manuscript Modal ================= */
+/* ================= ManuscriptModal ================= */
 interface ModalProps {
   manuscriptId: number;
   onClose: () => void;
@@ -2457,6 +2482,14 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
+  // Helper to get primary file for published (fallback)
+  const getPrimaryFile = (m: Manuscript) => {
+    if (m.status === "Published" && m.publicationFile) {
+      return m.publicationFile;
+    }
+    return m.filePath || null;
+  };
+
   return (
     <div
       style={{
@@ -2524,30 +2557,34 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
               <FileText size={18} /> Final Published File
             </h4>
             <div>
-              {manuscript.publicationFile ? (
-                <button
-                  onClick={() => handleDownload(manuscript.publicationFile!, `AFMJ_${manuscript.id}_published`)}
-                  disabled={downloadingFile}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 16px",
-                    background: "#e9ecef",
-                    borderRadius: "6px",
-                    color: "#0d6efd",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
-                >
-                  {downloadingFile ? <Spinner /> : <Download size={16} />}
-                  {downloadingFile ? "Downloading..." : "Download Published File"}
-                </button>
-              ) : (
-                <span style={{ color: "#6c757d" }}>No published file available.</span>
-              )}
+              {(() => {
+                const primaryFile = getPrimaryFile(manuscript);
+                if (primaryFile) {
+                  return (
+                    <button
+                      onClick={() => handleDownload(primaryFile, `AFMJ_${manuscript.id}_published`)}
+                      disabled={downloadingFile}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 16px",
+                        background: "#e9ecef",
+                        borderRadius: "6px",
+                        color: "#0d6efd",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
+                    >
+                      {downloadingFile ? <Spinner /> : <Download size={16} />}
+                      {downloadingFile ? "Downloading..." : "Download Published File"}
+                    </button>
+                  );
+                }
+                return <span style={{ color: "#6c757d" }}>No file available for download.</span>;
+              })()}
             </div>
           </div>
         )}
@@ -3627,6 +3664,169 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   );
 };
 
+/* ================= DeleteConfirmationModal ================= */
+interface DeleteConfirmationModalProps {
+  manuscript: Manuscript | null;
+  step: 'confirm' | 'confirmDelete' | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  onProceedToDelete: () => void;
+  confirmText: string;
+  onConfirmTextChange: (value: string) => void;
+  deleting: boolean;
+}
+
+const DeleteConfirmationModal: FC<DeleteConfirmationModalProps> = ({
+  manuscript,
+  step,
+  onClose,
+  onConfirm,
+  onProceedToDelete,
+  confirmText,
+  onConfirmTextChange,
+  deleting,
+}) => {
+  if (!manuscript) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 9999,
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "16px",
+          width: "90%",
+          maxWidth: "500px",
+          padding: "24px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+          position: "relative",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          <X size={24} />
+        </button>
+
+        {step === 'confirm' && (
+          <>
+            <h3 style={{ marginBottom: "16px", color: "#dc2626" }}>Are you sure?</h3>
+            <p style={{ marginBottom: "20px" }}>
+              You are about to delete the manuscript <strong>"{manuscript.title}"</strong>.
+              This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onProceedToDelete}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: "#dc2626",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                Proceed
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'confirmDelete' && (
+          <>
+            <h3 style={{ marginBottom: "16px", color: "#dc2626" }}>Type "delete" to confirm</h3>
+            <p style={{ marginBottom: "16px" }}>
+              Please type the word <strong>"delete"</strong> in the box below to confirm permanent deletion of <strong>"{manuscript.title}"</strong>.
+            </p>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => onConfirmTextChange(e.target.value)}
+              placeholder='Type "delete" here'
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                fontSize: "0.95rem",
+                marginBottom: "20px",
+              }}
+              autoFocus
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={confirmText !== "delete" || deleting}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: confirmText === "delete" ? "#dc2626" : "#9ca3af",
+                  color: "#fff",
+                  cursor: confirmText === "delete" ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                {deleting ? <Spinner /> : null}
+                {deleting ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ================= Page (ManuscriptCategoryView) ================= */
 const ManuscriptCategoryView: FC = () => {
   const { status } = useParams();
@@ -3646,6 +3846,98 @@ const ManuscriptCategoryView: FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Delete modal state
+  const [deleteModal, setDeleteModal] = useState<{ manuscript: Manuscript | null; step: 'confirm' | 'confirmDelete' | null }>({
+    manuscript: null,
+    step: null,
+  });
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const openDeleteModal = (m: Manuscript) => {
+    setDeleteModal({ manuscript: m, step: 'confirm' });
+    setDeleteConfirmText("");
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({ manuscript: null, step: null });
+    setDeleteConfirmText("");
+  };
+
+  const handleProceedToDelete = () => {
+    if (deleteModal.manuscript) {
+      setDeleteModal({ ...deleteModal, step: 'confirmDelete' });
+      setDeleteConfirmText("");
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.manuscript || deleteConfirmText !== "delete") return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API}?action=delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manuscript_id: deleteModal.manuscript.id,
+          confirm: "delete",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast.success(`"${deleteModal.manuscript.title}" deleted successfully.`);
+      closeDeleteModal();
+      await loadList();
+    } catch (err: any) {
+      toast.error(err.message || "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Helper: get primary file (fallback for published manuscripts)
+  const getPrimaryFile = (m: Manuscript): string | null => {
+    if (m.status === "Published" && m.publicationFile) {
+      return m.publicationFile;
+    }
+    return m.filePath || null;
+  };
+
+  // Download handler for published manuscripts (uses primary file)
+  const handleDownloadPublished = async (m: Manuscript) => {
+    const filePath = getPrimaryFile(m);
+    if (!filePath) {
+      toast.warn("No file available for download.");
+      return;
+    }
+    toast.info("Download started...");
+    try {
+      const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}&public=1`;
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      let extension = "";
+      const parts = filePath.split('.');
+      if (parts.length > 1) {
+        extension = parts.pop() || "";
+        if (extension.includes('?')) extension = extension.split('?')[0];
+      }
+      const customFileName = `AFMJ_${m.id}${extension ? '.' + extension : ''}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = customFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Downloaded successfully.");
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Download failed");
+    }
+  };
+
   const loadList = async () => {
     setLoadingList(true);
     try {
@@ -3659,8 +3951,10 @@ const ManuscriptCategoryView: FC = () => {
         revisedFilePath: m.revisedFilePath ?? null,
         coverLetterPath: m.coverLetterPath ?? null,
         circulatingFilePath: m.circulatingFilePath ?? null,
+        publicationFile: m.publicationFile ?? null,
         views: m.views ?? 0,
         downloads: m.downloads ?? 0,
+        editor: m.editor ?? null,
       }));
       setManuscripts(manuscriptsWithCompleted);
       setAllReviewers(reviewers);
@@ -3676,35 +3970,16 @@ const ManuscriptCategoryView: FC = () => {
     loadList();
   }, [readableStatus]);
 
+  // ============================================================
+  // The API already applies the correct backend filtering for this
+  // category (matching the sidebar counters), so we use its result
+  // as-is. Re-filtering here by status would incorrectly drop rows
+  // (e.g. "Revisions"/"Revised" rows come back as "Under Review").
+  // ============================================================
   useEffect(() => {
-    let filtered: Manuscript[] = [];
-    if (readableStatus === "Under Review") {
-      filtered = manuscripts.filter(
-        (m) =>
-          !m.hasRevisions ||
-          (m.hasRevisions &&
-            ((m.pendingReviews && m.pendingReviews > 0) ||
-              (m.pendingReviews === 0 && m.completedReviews && m.completedReviews > 0)))
-      );
-    } else if (readableStatus === "Revision Requested") {
-      filtered = manuscripts.filter(
-        (m) => m.hasRevisions && !m.hasUploadedRevision && m.pendingReviews === 0
-      );
-    } else if (readableStatus === "Revised") {
-      filtered = manuscripts.filter(
-        (m) =>
-          m.hasRevisions &&
-          m.hasUploadedRevision &&
-          m.pendingReviews === 0
-      );
-    } else if (readableStatus === "Published") {
-      filtered = manuscripts.filter((m) => m.status === "Published");
-    } else {
-      filtered = manuscripts;
-    }
-    setFilteredManuscripts(filtered);
+    setFilteredManuscripts(manuscripts);
     setCurrentPage(1);
-  }, [manuscripts, readableStatus]);
+  }, [manuscripts]);
 
   const totalPages = Math.ceil(filteredManuscripts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -3715,7 +3990,7 @@ const ManuscriptCategoryView: FC = () => {
     setCurrentPage(page);
   };
 
-  const isRevisionCategory = readableStatus === "Revision Requested" || readableStatus === "Revised";
+  const isRevisionCategory = readableStatus === "Revisions" || readableStatus === "Revised";
   const isPublishedCategory = readableStatus === "Published";
 
   const handleRowClick = (m: Manuscript) => {
@@ -3775,6 +4050,7 @@ const ManuscriptCategoryView: FC = () => {
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>ID</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Title</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Authors</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left" }}>Editor</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Type</th>
                     <th style={{ padding: "12px 8px", textAlign: "left" }}>Date</th>
                     {isPublishedCategory ? (
@@ -3792,7 +4068,7 @@ const ManuscriptCategoryView: FC = () => {
                   {currentManuscripts.map((m) => {
                     let rowBg = "transparent";
                     if (readableStatus === "Revised") rowBg = "#d4edda";
-                    else if (readableStatus === "Revision Requested") rowBg = "#fff3cd";
+                    else if (readableStatus === "Revisions") rowBg = "#fff3cd";
 
                     return (
                       <tr
@@ -3805,6 +4081,7 @@ const ManuscriptCategoryView: FC = () => {
                         <td style={{ padding: "12px 8px" }}>{formatManuscriptId(m.id)}</td>
                         <td style={{ padding: "12px 8px" }}>{m.title}</td>
                         <td style={{ padding: "12px 8px" }}>{m.authors}</td>
+                        <td style={{ padding: "12px 8px" }}>{m.editor || "—"}</td>
                         <td style={{ padding: "12px 8px" }}>{m.studyType}</td>
                         <td style={{ padding: "12px 8px" }}>{m.date}</td>
                         {isPublishedCategory ? (
@@ -3829,7 +4106,7 @@ const ManuscriptCategoryView: FC = () => {
                                 Under Review {m.pendingReviews ? `(${m.pendingReviews})` : "(All reviews completed)"}
                               </span>
                             )}
-                            {readableStatus === "Revision Requested" && (
+                            {readableStatus === "Revisions" && (
                               <span
                                 style={{
                                   display: "inline-block",
@@ -3842,7 +4119,7 @@ const ManuscriptCategoryView: FC = () => {
                                   textTransform: "uppercase",
                                 }}
                               >
-                                Revision Requested
+                                Revisions Required
                               </span>
                             )}
                             {readableStatus === "Revised" && (
@@ -3860,7 +4137,7 @@ const ManuscriptCategoryView: FC = () => {
                                 Revised (Ready)
                               </span>
                             )}
-                            {!["Under Review", "Revision Requested", "Revised"].includes(readableStatus) && (
+                            {!["Under Review", "Revisions", "Revised"].includes(readableStatus) && (
                               <span
                                 style={{
                                   display: "inline-block",
@@ -3879,11 +4156,12 @@ const ManuscriptCategoryView: FC = () => {
                         )}
                         <td style={{ padding: "12px 8px" }}>
                           <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, auto)",
+                            display: "flex",
                             gap: "4px",
-                            justifyContent: "start",
+                            flexWrap: "wrap",
+                            alignItems: "center",
                           }}>
+                            {/* View / History button */}
                             <button
                               title={isRevisionCategory ? "View Revision History" : "Preview"}
                               style={{ ...glassBtnStyle, color: isRevisionCategory ? "#f59e0b" : "#0d6efd", padding: "6px 8px" }}
@@ -3893,6 +4171,32 @@ const ManuscriptCategoryView: FC = () => {
                             >
                               {isRevisionCategory ? <History size={16} /> : <Eye size={16} />}
                               <span style={{ marginLeft: "4px" }}>{isRevisionCategory ? "History" : "View"}</span>
+                            </button>
+
+                            {/* Download button for published manuscripts */}
+                            {isPublishedCategory && getPrimaryFile(m) && (
+                              <button
+                                title="Download full article"
+                                style={{ ...glassBtnStyle, color: "#16a34a", padding: "6px 8px" }}
+                                onClick={() => handleDownloadPublished(m)}
+                                onMouseEnter={hoverGlass}
+                                onMouseLeave={leaveGlass}
+                              >
+                                <Download size={16} />
+                                <span style={{ marginLeft: "4px" }}>Download</span>
+                              </button>
+                            )}
+
+                            {/* Delete button for all manuscripts */}
+                            <button
+                              title="Delete manuscript"
+                              style={{ ...glassBtnStyle, color: "#dc2626", padding: "6px 8px" }}
+                              onClick={() => openDeleteModal(m)}
+                              onMouseEnter={hoverGlass}
+                              onMouseLeave={leaveGlass}
+                            >
+                              <X size={16} />
+                              <span style={{ marginLeft: "4px" }}>Delete</span>
                             </button>
                           </div>
                         </td>
@@ -3918,6 +4222,7 @@ const ManuscriptCategoryView: FC = () => {
           )}
         </div>
 
+        {/* Modals */}
         {activeModalId && (
           <ManuscriptModal
             manuscriptId={activeModalId}
@@ -3996,6 +4301,18 @@ const ManuscriptCategoryView: FC = () => {
             }}
           />
         )}
+
+        {/* Delete Modal */}
+        <DeleteConfirmationModal
+          manuscript={deleteModal.manuscript}
+          step={deleteModal.step}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDelete}
+          onProceedToDelete={handleProceedToDelete}
+          confirmText={deleteConfirmText}
+          onConfirmTextChange={setDeleteConfirmText}
+          deleting={deleting}
+        />
       </div>
     </>
   );
