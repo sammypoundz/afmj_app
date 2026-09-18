@@ -55,7 +55,7 @@ const Manuscripts: FC = () => {
   useEffect(() => {
     const fetchManuscripts = async () => {
       try {
-        const res = await authFetch("https://vinosschool.com/api/manuscripts.php");
+        const res = await authFetch("/api2/manuscripts.php");
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         

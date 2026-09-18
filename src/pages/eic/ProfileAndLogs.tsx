@@ -28,7 +28,7 @@ const ProfileAndLogs = () => {
     const fetchData = async () => {
       try {
         // Get profile
-        const profileRes = await authFetch("https://vinosschool.com/api/authorApi.php?action=getProfile");
+        const profileRes = await authFetch("/api2/authorApi.php?action=getProfile");
         if (profileRes.ok) {
           const data = await profileRes.json();
           setProfile({
@@ -39,7 +39,7 @@ const ProfileAndLogs = () => {
         }
 
         // Get logs
-        const logsRes = await authFetch("https://vinosschool.com/api/logsApi.php?action=list&limit=50");
+        const logsRes = await authFetch("/api2/logsApi.php?action=list&limit=50");
         if (logsRes.ok) {
           const data = await logsRes.json();
           setLogs(data);
@@ -59,7 +59,7 @@ const ProfileAndLogs = () => {
 
   const handleSaveProfile = async () => {
     try {
-      const res = await authFetch("https://vinosschool.com/api/authorApi.php?action=updateProfile", {
+      const res = await authFetch("/api2/authorApi.php?action=updateProfile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,7 +70,7 @@ const ProfileAndLogs = () => {
       if (res.ok) {
         toast.success("Profile updated successfully");
         // Optionally log the action
-        await authFetch("https://vinosschool.com/api/logsApi.php?action=log", {
+        await authFetch("/api2/logsApi.php?action=log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

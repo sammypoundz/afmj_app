@@ -28,8 +28,8 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 /* ================= API ================= */
-const API = "https://vinosschool.com/api/EICmanusciptsapi.php";
-const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
+const API = "/api2/EICmanusciptsapi.php";
+const DOWNLOAD_API = "/api2/download.php";
 
 /* ================= Global Styles ================= */
 const GlobalStyles = () => (

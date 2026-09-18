@@ -50,8 +50,8 @@ const EditorDashboard = () => {
     const fetchDashboard = async () => {
       try {
         const [statsRes, pendingRes] = await Promise.all([
-          authFetch("https://vinosschool.com/api/editorApi.php?action=getDashboardStats"),
-          authFetch("https://vinosschool.com/api/editorApi.php?action=getPendingActions"),
+          authFetch("/api2/editorApi.php?action=getDashboardStats"),
+          authFetch("/api2/editorApi.php?action=getPendingActions"),
         ]);
 
         if (!statsRes.ok || !pendingRes.ok) {

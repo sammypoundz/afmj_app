@@ -18,7 +18,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
+const API_BASE = "/api2/reviewerApi.php";
 
 interface ActiveReview {
   id: number;
@@ -174,7 +174,7 @@ const ReviewerActiveReviews = () => {
 
     setDownloadingFile(customFileName);
     try {
-      const response = await authFetch(`https://vinosschool.com/api/download.php?file=${encodeURIComponent(filePath)}`);
+      const response = await authFetch(`/api2/download.php?file=${encodeURIComponent(filePath)}`);
 
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`);

@@ -21,7 +21,7 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const res = await authFetch("https://vinosschool.com/api/analyticsApi.php?action=getData");
+        const res = await authFetch("/api2/analyticsApi.php?action=getData");
         if (!res.ok) throw new Error("Failed to fetch analytics");
         const data = await res.json();
         setSummary(data.summary);

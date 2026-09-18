@@ -4,9 +4,9 @@ import { Bell, CheckCheck, ExternalLink, AlertCircle } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
-const API_BASE = "https://vinosschool.com/api/authorApi.php";
-const VERIFY_API = "https://vinosschool.com/api/verify_status.php";
-const REGISTER_API = "https://vinosschool.com/api/register.php";
+const API_BASE = "/api2/authorApi.php";
+const VERIFY_API = "/api2/verify_status.php";
+const REGISTER_API = "/api2/register.php";
 
 interface UserInfo {
   id: number;

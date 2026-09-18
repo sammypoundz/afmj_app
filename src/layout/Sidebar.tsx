@@ -34,7 +34,7 @@ const attentionLabels = new Set([
   "Publication Decision"
 ]);
 
-const API_BASE = "https://vinosschool.com/api/EICcountersAPI.php";
+const API_BASE = "/api2/EICcountersAPI.php";
 
 const buildMenu = () => {
   const menu = eicMenu.map(section => ({

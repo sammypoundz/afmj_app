@@ -6,10 +6,10 @@ import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
 import toast from "react-hot-toast";
 
-const API_BASE = "https://vinosschool.com/api/EICmanusciptsapi.php";
-const NOTIF_API = "https://vinosschool.com/api/EICnotificationsAPI.php";
-const VERIFY_API = "https://vinosschool.com/api/verify_status.php";
-const REGISTER_API = "https://vinosschool.com/api/register.php";
+const API_BASE = "/api2/EICmanusciptsapi.php";
+const NOTIF_API = "/api2/EICnotificationsAPI.php";
+const VERIFY_API = "/api2/verify_status.php";
+const REGISTER_API = "/api2/register.php";
 
 interface Notification {
   id: number;

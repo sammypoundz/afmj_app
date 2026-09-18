@@ -10,7 +10,7 @@ export interface Notification {
   read: boolean;
 }
 
-const API_BASE = "https://vinosschool.com/api/EICnotificationsAPI.php";
+const API_BASE = "/api2/EICnotificationsAPI.php";
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

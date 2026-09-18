@@ -6,8 +6,15 @@ export default defineConfig({
   base: "/dev/",
   server: {
     proxy: {
+      '/api2': {
+        target: 'https://pkluster.online',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api2/, '/api2'),
+        timeout: 60000,
+        proxyTimeout: 60000,
+      },
       '/api': {
-        target: 'https://vinosschool.com',
+        target: 'https://pkluster.online',
         changeOrigin: true,
         // Increase timeout to 60 seconds (default is often 30s)
         timeout: 60000,           // in milliseconds

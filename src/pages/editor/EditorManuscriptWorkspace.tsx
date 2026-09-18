@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ArrowLeft, Download, Users, Clock, CheckCircle, XCircle, Loader } from "lucide-react";
 import toast from "react-hot-toast";
 
-const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
+const DOWNLOAD_API = "/api2/download.php";
 
 interface ManuscriptDetail {
   id: number;
@@ -61,7 +61,7 @@ const EditorManuscriptWorkspace = () => {
     const fetchDetails = async () => {
       try {
         const res = await authFetch(
-          `https://vinosschool.com/api/editorApi.php?action=getManuscriptDetails&id=${id}`
+          `/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
         );
         if (!res.ok) throw new Error("Failed to fetch manuscript details");
         const data = await res.json();
@@ -80,7 +80,7 @@ const EditorManuscriptWorkspace = () => {
   const refreshDetails = async () => {
     try {
       const res = await authFetch(
-        `https://vinosschool.com/api/editorApi.php?action=getManuscriptDetails&id=${id}`
+        `/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -143,7 +143,7 @@ const EditorManuscriptWorkspace = () => {
 
     try {
       const res = await authFetch(
-        "https://vinosschool.com/api/editorApi.php?action=makeDecision",
+        "/api2/editorApi.php?action=makeDecision",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

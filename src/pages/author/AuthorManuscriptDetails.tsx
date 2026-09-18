@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE = "https://vinosschool.com/api/authorApi.php";
-const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
+const API_BASE = "/api2/authorApi.php";
+const DOWNLOAD_API = "/api2/download.php";
 
 interface Manuscript {
   id: number;

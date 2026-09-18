@@ -13,7 +13,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
+const API_BASE = "/api2/reviewerApi.php";
 
 const ReviewerDashboard = () => {
   const navigate = useNavigate();

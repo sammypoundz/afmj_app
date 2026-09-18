@@ -26,7 +26,7 @@ const ReviewProgressPage = () => {
     const fetchProgress = async () => {
       try {
         const res = await authFetch(
-          "https://vinosschool.com/api/editorApi.php?action=getReviewProgress"
+          "/api2/editorApi.php?action=getReviewProgress"
         );
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));

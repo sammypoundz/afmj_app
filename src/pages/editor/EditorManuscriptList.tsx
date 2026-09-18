@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Eye, FileText, Download, File, ArrowLeft, X, Loader } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
-const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
+const DOWNLOAD_API = "/api2/download.php";
 
 interface Props {
   title: string;
@@ -58,7 +58,7 @@ const EditorManuscriptList = ({ title, status }: Props) => {
     const fetchManuscripts = async () => {
       try {
         const res = await authFetch(
-          `https://vinosschool.com/api/editorApi.php?action=listManuscripts&type=${status}`
+          `/api2/editorApi.php?action=listManuscripts&type=${status}`
         );
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -100,7 +100,7 @@ const EditorManuscriptList = ({ title, status }: Props) => {
     setPreview(null);
     try {
       const res = await authFetch(
-        `https://vinosschool.com/api/editorApi.php?action=getManuscriptDetails&id=${manuscript.id}`
+        `/api2/editorApi.php?action=getManuscriptDetails&id=${manuscript.id}`
       );
       if (!res.ok) throw new Error("Failed to load manuscript details");
       const data = await res.json();

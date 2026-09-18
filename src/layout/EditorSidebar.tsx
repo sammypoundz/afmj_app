@@ -35,7 +35,7 @@ const EditorSidebar: FC = () => {
     const fetchCounts = async () => {
       try {
         const res = await authFetch(
-          "https://vinosschool.com/api/editorApi.php?action=getSidebarCounts"
+          "/api2/editorApi.php?action=getSidebarCounts"
         );
         if (!res.ok) throw new Error("Failed to fetch counts");
         const data = await res.json();

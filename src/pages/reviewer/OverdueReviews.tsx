@@ -4,7 +4,7 @@ import { ArrowLeft, FileText, BookOpen, Target, CheckCircle, User, X, Calendar, 
 import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "https://vinosschool.com/api/reviewerApi.php";
+const API_BASE = "/api2/reviewerApi.php";
 
 interface OverdueReview {
   id: number;

@@ -14,7 +14,7 @@ interface RevisionItem {
   entryId: number;
 }
 
-const UPLOAD_URL = "https://vinosschool.com/api/upload.php";
+const UPLOAD_URL = "/api2/upload.php";
 
 const RevisionHandlingPage = () => {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ const RevisionHandlingPage = () => {
   const fetchRevisions = async () => {
     try {
       const res = await authFetch(
-        "https://vinosschool.com/api/editorApi.php?action=getRevisions"
+        "/api2/editorApi.php?action=getRevisions"
       );
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -101,7 +101,7 @@ const RevisionHandlingPage = () => {
       };
 
       const res = await authFetch(
-        "https://vinosschool.com/api/editorApi.php?action=sendRevisionFeedback",
+        "/api2/editorApi.php?action=sendRevisionFeedback",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

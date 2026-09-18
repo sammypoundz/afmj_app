@@ -35,8 +35,8 @@ const ReviewerAssignmentPage = () => {
     const fetchData = async () => {
       try {
         const [manRes, revRes] = await Promise.all([
-          authFetch("https://vinosschool.com/api/editorApi.php?action=getAssignableManuscripts"),
-          authFetch("https://vinosschool.com/api/editorApi.php?action=getReviewers"),
+          authFetch("/api2/editorApi.php?action=getAssignableManuscripts"),
+          authFetch("/api2/editorApi.php?action=getReviewers"),
         ]);
 
         if (!manRes.ok || !revRes.ok) {
@@ -69,7 +69,7 @@ const ReviewerAssignmentPage = () => {
     const toastId = toast.loading("Assigning reviewer...");
 
     try {
-      const res = await authFetch("https://vinosschool.com/api/editorApi.php?action=assignReviewer", {
+      const res = await authFetch("/api2/editorApi.php?action=assignReviewer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

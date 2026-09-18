@@ -6,9 +6,9 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE = "https://vinosschool.com/api/EICpublicationApi.php";
-const UPLOAD_URL = "https://vinosschool.com/api/upload.php";
-const DOWNLOAD_API = "https://vinosschool.com/api/download.php";
+const API_BASE = "/api2/EICpublicationApi.php";
+const UPLOAD_URL = "/api2/upload.php";
+const DOWNLOAD_API = "/api2/download.php";
 
 // Default payment instructions template (editable)
 const DEFAULT_PAYMENT_INSTRUCTIONS = `Dear Author,

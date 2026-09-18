@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
 
-const VERIFY_API = "https://vinosschool.com/api/verify_status.php";
-const REGISTER_API = "https://vinosschool.com/api/register.php";
+const VERIFY_API = "/api2/verify_status.php";
+const REGISTER_API = "/api2/register.php";
 
 const styles = {
   topbar: {

@@ -28,7 +28,7 @@ const typeDisplay: Record<string, { label: string; icon: React.ElementType }> = 
   'ticket-received':      { label: 'Ticket from Author', icon: Mail },
 };
 
-const NOTIF_API = "https://vinosschool.com/api/EICnotificationsAPI.php";
+const NOTIF_API = "/api2/EICnotificationsAPI.php";
 
 const Notifications: FC = () => {
   const navigate = useNavigate();

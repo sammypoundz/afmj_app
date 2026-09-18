@@ -9,7 +9,7 @@ import {
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_BASE = "https://vinosschool.com/api/EICUsersApi.php";
+const API_BASE = "/api2/EICUsersApi.php";
 
 // ================= Types =================
 interface PastAction {

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const API_FORGOT = 'https://vinosschool.com/api/forgot-password.php';
-const API_RESET = 'https://vinosschool.com/api/reset-password.php';
+const API_FORGOT = '/api2/forgot-password.php';
+const API_RESET = '/api2/reset-password.php';
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 interface PasswordValidation {

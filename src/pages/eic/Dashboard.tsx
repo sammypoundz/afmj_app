@@ -57,7 +57,7 @@ const Dashboard = () => {
     const fetchDashboard = async () => {
       try {
         const response = await axios.get(
-          "https://vinosschool.com/api/dashboard.php?action=dashboard",
+          "/api2/dashboard.php?action=dashboard",
           {
             headers: {
               "Content-Type": "application/json",

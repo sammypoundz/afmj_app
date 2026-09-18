@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const API_REGISTER = 'https://vinosschool.com/api/register.php';
+const API_REGISTER = '/api2/register.php';
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 interface RegisterFormData {
