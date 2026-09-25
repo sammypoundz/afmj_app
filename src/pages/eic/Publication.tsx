@@ -5,10 +5,11 @@ import { CheckCircle, FileText, ArrowLeft, Paperclip, Download, Eye, Save } from
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/EICpublicationApi.php";
-const UPLOAD_URL = "/api2/upload.php";
-const DOWNLOAD_API = "/api2/download.php";
+const API_BASE = `${API_ORIGIN}/api2/EICpublicationApi.php`;
+const UPLOAD_URL = `${API_ORIGIN}/api2/upload.php`;
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 // Default payment instructions template (editable)
 const DEFAULT_PAYMENT_INSTRUCTIONS = `Dear Author,

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FileText, Send, X, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
 interface RevisionItem {
   manuscriptId: number;
@@ -14,7 +15,7 @@ interface RevisionItem {
   entryId: number;
 }
 
-const UPLOAD_URL = "/api2/upload.php";
+const UPLOAD_URL = `${API_ORIGIN}/api2/upload.php`;
 
 const RevisionHandlingPage = () => {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ const RevisionHandlingPage = () => {
   const fetchRevisions = async () => {
     try {
       const res = await authFetch(
-        "/api2/editorApi.php?action=getRevisions"
+        `${API_ORIGIN}/api2/editorApi.php?action=getRevisions`
       );
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -101,7 +102,7 @@ const RevisionHandlingPage = () => {
       };
 
       const res = await authFetch(
-        "/api2/editorApi.php?action=sendRevisionFeedback",
+        `${API_ORIGIN}/api2/editorApi.php?action=sendRevisionFeedback`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -26,10 +26,12 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { API_ORIGIN } from "../../apiConfig"
+import { refreshSidebarCounts } from "../../layout/useSidebarCounts";
 
 /* ================= API ================= */
-const API = "/api2/EICmanusciptsapi.php";
-const DOWNLOAD_API = "/api2/download.php";
+const API = `${API_ORIGIN}/api2/EICmanusciptsapi.php`;
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 /* ================= Global Styles ================= */
 const GlobalStyles = () => (
@@ -696,8 +698,8 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
   }, [manuscriptId]);
 
   const toggleRevision = (index: number) => {
-    setExpandedRevisions(prev => 
-      prev.includes(index) 
+    setExpandedRevisions(prev =>
+      prev.includes(index)
         ? prev.filter(i => i !== index)
         : [...prev, index]
     );
@@ -719,14 +721,14 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
       const response = await authFetch(downloadUrl);
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       const blob = await response.blob();
-      
+
       let extension = "";
       const parts = filePath.split('.');
       if (parts.length > 1) {
         extension = parts.pop() || "";
         if (extension.includes('?')) extension = extension.split('?')[0];
       }
-      
+
       const customFileName = `${fileNameBase}${extension ? '.' + extension : ''}`;
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -798,6 +800,18 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
 
   const canReassign = !hasPending && filesComplete;
 
+  // Reviewers who commented on the latest revision — pre-selected in the
+  // reassign modal so the admin can easily reassign the same reviewers.
+  const previousReviewers = latestRevision
+    ? Array.from(
+        new Set(
+          latestRevision.entries
+            .map(e => (e.reviewer || "").trim())
+            .filter(name => name.length > 0)
+        )
+      )
+    : [];
+
   return (
     <div
       style={{
@@ -859,7 +873,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
             <strong>{manuscript.title}</strong>
           </p>
           <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
-            ID: {formatManuscriptId(manuscript.id)} | Authors: {manuscript.authors} | 
+            ID: {formatManuscriptId(manuscript.id)} | Authors: {manuscript.authors} |
             Total Revisions: {revisions.length}
           </p>
         </div>
@@ -903,7 +917,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                     onClick={() => toggleRevision(index)}
                     style={{
                       padding: "16px 20px",
-                      background: allAddressed 
+                      background: allAddressed
                         ? "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)"
                         : "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
                       cursor: "pointer",
@@ -958,7 +972,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                           {addressedEntries}/{totalEntries} Addressed
                         </span>
                       )}
-                      <div style={{ 
+                      <div style={{
                         transform: isExpanded ? "rotate(-90deg)" : "rotate(90deg)",
                         transition: "transform 0.2s",
                         color: allAddressed ? "#065f46" : "#92400e"
@@ -1317,7 +1331,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
       {showReassignModal && (
         <ReviewerSelectionModal
           reviewers={allReviewers}
-          currentReviewers={latestRevision ? latestRevision.entries.filter(e => !e.addressed).map(e => e.reviewer) : []}
+          currentReviewers={previousReviewers}
           onClose={() => setShowReassignModal(false)}
           onTempSave={async (selectedNames) => {
             const selectedReviewerObjects = selectedNames
@@ -3023,7 +3037,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 <CheckCircle size={20} /> Finalized Manuscript
               </h3>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button 
+                <button
                   disabled={productionLoading}
                   onClick={async () => {
                     setProductionLoading(true);
@@ -3888,6 +3902,7 @@ const ManuscriptCategoryView: FC = () => {
       toast.success(`"${deleteModal.manuscript.title}" deleted successfully.`);
       closeDeleteModal();
       await loadList();
+      refreshSidebarCounts();
     } catch (err: any) {
       toast.error(err.message || "Delete failed.");
     } finally {
@@ -3959,6 +3974,8 @@ const ManuscriptCategoryView: FC = () => {
       setManuscripts(manuscriptsWithCompleted);
       setAllReviewers(reviewers);
       setCurrentPage(1);
+      // Keep the sidebar counters in sync after any list change
+      refreshSidebarCounts();
     } catch (err) {
       console.error("Failed to load manuscripts:", err);
       toast.error("Failed to load manuscripts.");

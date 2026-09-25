@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Clock, CheckCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
 interface ReviewProgress {
   manuscriptId: number;
@@ -26,7 +27,7 @@ const ReviewProgressPage = () => {
     const fetchProgress = async () => {
       try {
         const res = await authFetch(
-          "/api2/editorApi.php?action=getReviewProgress"
+          `${API_ORIGIN}/api2/editorApi.php?action=getReviewProgress`
         );
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));

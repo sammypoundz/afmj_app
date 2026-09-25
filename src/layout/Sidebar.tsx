@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Bell, Menu } from "lucide-react";
 import { eicMenu } from "./EICSidebar";
+import { useSidebarCounts, useEicManuscriptCounts } from "./useSidebarCounts";
 
 // Logo URLs
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
@@ -23,6 +24,18 @@ const labelToApiKey: Record<string, string> = {
   "Authors": "authors"
 };
 
+// Maps sidebar labels to the EXACT `status` value the ManuscriptCategoryView
+// page passes to the list API, so badges always match the page content.
+const labelToCategoryStatus: Record<string, string> = {
+  "New Submissions": "New Submissions",
+  "Under Review": "Under Review",
+  "Revision Requested": "Revisions",
+  "Revised": "Revised",
+  "Accepted": "Accepted",
+  "Rejected": "Rejected",
+  "Published": "Published",
+};
+
 const attentionLabels = new Set([
   "New Submissions",
   "Under Review",
@@ -33,8 +46,6 @@ const attentionLabels = new Set([
   "Published",
   "Publication Decision"
 ]);
-
-const API_BASE = "/api2/EICcountersAPI.php";
 
 const buildMenu = () => {
   const menu = eicMenu.map(section => ({
@@ -60,29 +71,12 @@ const buildMenu = () => {
 const Sidebar: FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const { counts } = useSidebarCounts<Record<string, number>>("eic");
+  // In-sync manuscript category counts (same endpoint + filter as the category pages)
+  const { counts: manuscriptCounts } = useEicManuscriptCounts();
   const navigate = useNavigate();
   const location = useLocation();
   const sidebarRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const res = await fetch(`${API_BASE}?action=dashboardCounts`);
-        const data = await res.json();
-        if (res.ok) {
-          setCounts(data);
-        } else {
-          console.error("Failed to fetch counters:", data.error);
-        }
-      } catch (err) {
-        console.error("Error fetching counters:", err);
-      }
-    };
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -281,8 +275,14 @@ const Sidebar: FC = () => {
 
               /* Manuscripts */
               else if (group.section === "Manuscripts") {
-                const status = item.label.toLowerCase().replace(/\s+/g, "-");
-                path = `/eic/manuscripts/${status}`;
+                // "Revision Requested" opens the same "Revisions" category the
+                // manuscripts overview page links to, keeping routes in sync.
+                if (item.label === "Revision Requested") {
+                  path = "/eic/manuscripts/revisions";
+                } else {
+                  const status = item.label.toLowerCase().replace(/\s+/g, "-");
+                  path = `/eic/manuscripts/${status}`;
+                }
               }
 
               /* Publications */
@@ -312,8 +312,15 @@ const Sidebar: FC = () => {
                 else if (item.label === "Settings") path = "/eic/settings";
               }
 
-              const apiKey = labelToApiKey[item.label];
-              const count = apiKey ? (counts[apiKey] || 0) : 0;
+              // Manuscript categories use the in-sync counts; everything else
+              // (users, etc.) falls back to the counter API.
+              const categoryStatus = labelToCategoryStatus[item.label];
+              const count = categoryStatus
+                ? (manuscriptCounts[categoryStatus] ?? 0)
+                : (() => {
+                    const apiKey = labelToApiKey[item.label];
+                    return apiKey ? (counts[apiKey] || 0) : 0;
+                  })();
               const showBadge = attentionLabels.has(item.label) && count > 0;
               const isActive = location.pathname === path;
 

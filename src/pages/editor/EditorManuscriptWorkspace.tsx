@@ -3,8 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { ArrowLeft, Download, Users, Clock, CheckCircle, XCircle, Loader } from "lucide-react";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
-const DOWNLOAD_API = "/api2/download.php";
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface ManuscriptDetail {
   id: number;
@@ -61,7 +62,7 @@ const EditorManuscriptWorkspace = () => {
     const fetchDetails = async () => {
       try {
         const res = await authFetch(
-          `/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
+          `${API_ORIGIN}/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
         );
         if (!res.ok) throw new Error("Failed to fetch manuscript details");
         const data = await res.json();
@@ -80,7 +81,7 @@ const EditorManuscriptWorkspace = () => {
   const refreshDetails = async () => {
     try {
       const res = await authFetch(
-        `/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
+        `${API_ORIGIN}/api2/editorApi.php?action=getManuscriptDetails&id=${id}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -143,7 +144,7 @@ const EditorManuscriptWorkspace = () => {
 
     try {
       const res = await authFetch(
-        "/api2/editorApi.php?action=makeDecision",
+        `${API_ORIGIN}/api2/editorApi.php?action=makeDecision`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

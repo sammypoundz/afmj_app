@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import { API_ORIGIN } from "../apiConfig";
 
-const API_LOGIN = '/api2/login.php';
+const API_LOGIN = `${API_ORIGIN}/api2/login.php`;
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 interface LoginFormData {

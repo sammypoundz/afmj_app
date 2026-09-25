@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { API_ORIGIN } from '../apiConfig';
 
 type UserRole = 'author' | 'reviewer' | 'editor' | 'publisher' | 'admin';
 
@@ -97,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setIsLoading(true);
     try {
-      const res = await authFetch('/api2/me.php');
+      const res = await authFetch(`${API_ORIGIN}/api2/me.php`);
       if (res.ok) {
         const data = await res.json();
         // console.log('debug data:', data);
@@ -157,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       // Call logout endpoint with the session ID header
-      await authFetch('/api2/logout.php', { method: 'POST' });
+      await authFetch(`${API_ORIGIN}/api2/logout.php`, { method: 'POST' });
     } catch (error) {
       console.error('Logout failed', error);
     } finally {

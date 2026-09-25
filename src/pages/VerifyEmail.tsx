@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../apiConfig"
 
-const VERIFY_API = "/api2/register.php";
-const STATUS_API = "/api2/verify_status.php";
+const VERIFY_API = `${API_ORIGIN}/api2/register.php`;
+const STATUS_API = `${API_ORIGIN}/api2/verify_status.php`;
 
 const VerifyEmail: React.FC = () => {
   const navigate = useNavigate();

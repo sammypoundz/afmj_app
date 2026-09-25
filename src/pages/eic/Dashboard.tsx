@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_ORIGIN } from "../../apiConfig"
 import {
   FileText,
   Clock,
@@ -57,7 +58,7 @@ const Dashboard = () => {
     const fetchDashboard = async () => {
       try {
         const response = await axios.get(
-          "/api2/dashboard.php?action=dashboard",
+          `${API_ORIGIN}/api2/dashboard.php?action=dashboard`,
           {
             headers: {
               "Content-Type": "application/json",

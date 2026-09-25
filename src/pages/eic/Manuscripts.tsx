@@ -10,6 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig";
 
 interface Manuscript {
   id: number;
@@ -55,7 +56,7 @@ const Manuscripts: FC = () => {
   useEffect(() => {
     const fetchManuscripts = async () => {
       try {
-        const res = await authFetch("/api2/manuscripts.php");
+        const res = await authFetch(`${API_ORIGIN}/api2/manuscripts.php`);
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         
@@ -118,7 +119,7 @@ const Manuscripts: FC = () => {
         let allItems = manuscripts.filter((m) => m.status === status);
         
         // For "Revisions" status, only show manuscripts with pending revisions
-        if (status === "Revisions") {
+        if (status === "Revisions" || status === "Revision Requested") {
           allItems = allItems.filter((m) => m.hasRevisions && !m.hasUploadedRevision);
         }
         // For "Revised" status, only show manuscripts with uploaded revisions

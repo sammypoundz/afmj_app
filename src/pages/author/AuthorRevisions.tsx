@@ -18,9 +18,10 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
-const DOWNLOAD_API = "/api2/download.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface RevisionHistoryItem {
   revision_number: number;
@@ -500,7 +501,7 @@ const AuthorRevisions = () => {
           const man = item.manuscript;
           const isExpanded = expandedManuscriptId === man.id;
           const isSubmitting = submitting[man.id] || false;
-          const needsSubmission = man.status === "under_review" && (man.has_pending_revision !== false);
+          const needsSubmission = (man.status === "under_review" || man.status === "revision_requested") && (man.has_pending_revision !== false);
           const revisionHistory = item.revisionHistory || [];
 
           // Separate previous revisions (those without pending entries)

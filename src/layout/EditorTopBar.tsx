@@ -5,10 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../apiConfig"
 
-const VERIFY_API = "/api2/verify_status.php";
-const REGISTER_API = "/api2/register.php";
-const EDITOR_API = "/api2/editorApi.php";
+const VERIFY_API = `${API_ORIGIN}/api2/verify_status.php`;
+const REGISTER_API = `${API_ORIGIN}/api2/register.php`;
+const EDITOR_API = `${API_ORIGIN}/api2/editorApi.php`;
 
 const EditorTopBar: FC = () => {
   const navigate = useNavigate();

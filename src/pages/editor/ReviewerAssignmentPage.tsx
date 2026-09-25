@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { UserCheck, Search, UserPlus, ArrowLeft, Loader } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
 interface Reviewer {
   id: number;
@@ -35,8 +36,8 @@ const ReviewerAssignmentPage = () => {
     const fetchData = async () => {
       try {
         const [manRes, revRes] = await Promise.all([
-          authFetch("/api2/editorApi.php?action=getAssignableManuscripts"),
-          authFetch("/api2/editorApi.php?action=getReviewers"),
+          authFetch(`${API_ORIGIN}/api2/editorApi.php?action=getAssignableManuscripts`),
+          authFetch(`${API_ORIGIN}/api2/editorApi.php?action=getReviewers`),
         ]);
 
         if (!manRes.ok || !revRes.ok) {
@@ -69,7 +70,7 @@ const ReviewerAssignmentPage = () => {
     const toastId = toast.loading("Assigning reviewer...");
 
     try {
-      const res = await authFetch("/api2/editorApi.php?action=assignReviewer", {
+      const res = await authFetch(`${API_ORIGIN}/api2/editorApi.php?action=assignReviewer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

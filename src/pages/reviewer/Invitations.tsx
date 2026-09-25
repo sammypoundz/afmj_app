@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, FileText, BookOpen, Target, CheckCircle, User, BarChart } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
 // Global keyframes for spinner animation
 const GlobalStyles = () => (
@@ -13,7 +14,7 @@ const GlobalStyles = () => (
 );
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "/api2/reviewerApi.php";
+const API_BASE = `${API_ORIGIN}/api2/reviewerApi.php`;
 
 interface Invitation {
   id: number;

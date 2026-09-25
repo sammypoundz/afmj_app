@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
 
 // Helper to convert string to title case
 const toTitleCase = (str: string): string => {

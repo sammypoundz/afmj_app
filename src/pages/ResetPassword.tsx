@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { API_ORIGIN } from "../apiConfig";
 
-const API_RESET = '/api2/reset-password.php';
+const API_RESET = `${API_ORIGIN}/api2/reset-password.php`;
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 const ResetPassword: React.FC = () => {

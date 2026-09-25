@@ -2,7 +2,7 @@ import type { FC } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+import { useSidebarCounts } from "./useSidebarCounts";
 import { editorMenu } from "./editorMenu";
 
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
@@ -19,33 +19,18 @@ interface Counts {
 const EditorSidebar: FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>({
+  const { counts: countsRaw } = useSidebarCounts<Counts>("editor");
+  const counts: Counts = {
     newSubmissions: 0,
     underReview: 0,
     revisions: 0,
     accepted: 0,
     rejected: 0,
-  });
+    ...countsRaw,
+  };
   const navigate = useNavigate();
   const location = useLocation();
-  const { authFetch } = useAuth();
   const sidebarRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const res = await authFetch(
-          "/api2/editorApi.php?action=getSidebarCounts"
-        );
-        if (!res.ok) throw new Error("Failed to fetch counts");
-        const data = await res.json();
-        setCounts(data);
-      } catch (err) {
-        console.error("Error fetching sidebar counts:", err);
-      }
-    };
-    fetchCounts();
-  }, [authFetch]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

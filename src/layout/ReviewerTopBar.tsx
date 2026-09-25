@@ -3,9 +3,10 @@ import { User, LogOut, ChevronDown, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../apiConfig"
 
-const VERIFY_API = "/api2/verify_status.php";
-const REGISTER_API = "/api2/register.php";
+const VERIFY_API = `${API_ORIGIN}/api2/verify_status.php`;
+const REGISTER_API = `${API_ORIGIN}/api2/register.php`;
 
 const styles = {
   topbar: {

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { API_ORIGIN } from "../apiConfig"
 
 export interface Notification {
   id: number;
@@ -10,7 +11,7 @@ export interface Notification {
   read: boolean;
 }
 
-const API_BASE = "/api2/EICnotificationsAPI.php";
+const API_BASE = `${API_ORIGIN}/api2/EICnotificationsAPI.php`;
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

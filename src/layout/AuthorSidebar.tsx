@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSidebarCounts } from "./useSidebarCounts";
 import {
   LayoutDashboard,
   FileText,
@@ -17,6 +18,15 @@ import {
 // Images
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
 const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
+
+interface AuthorSidebarStats {
+  totalSubmissions: number;
+  underReview: number;
+  revisionsRequired: number;
+  accepted: number;
+  rejected: number;
+  published: number;
+}
 
 // Menu groups and items
 const authorMenu = [
@@ -45,6 +55,31 @@ const AuthorSidebar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Live sidebar counters (auto-refresh on navigation, focus and polling)
+  const { counts: countsRaw } = useSidebarCounts<AuthorSidebarStats>("author");
+  const stats: AuthorSidebarStats | null =
+    Object.keys(countsRaw).length > 0
+      ? ({
+          totalSubmissions: 0,
+          underReview: 0,
+          revisionsRequired: 0,
+          accepted: 0,
+          rejected: 0,
+          published: 0,
+          ...countsRaw,
+        } as AuthorSidebarStats)
+      : null;
+
+  const getCount = (label: string): number => {
+    if (!stats) return 0;
+    const counts: Record<string, number> = {
+      "My Submissions": stats.totalSubmissions,
+      Revisions: stats.revisionsRequired,
+      Published: stats.published,
+    };
+    return counts[label] || 0;
+  };
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -264,6 +299,24 @@ const AuthorSidebar = () => {
                     <Icon size={20} />
                     {!collapsed && <span>{item.label}</span>}
                   </div>
+
+                  {!collapsed && getCount(item.label) > 0 && (
+                    <span
+                      style={{
+                        background:
+                          item.label === "Revisions" ? "#dc2626" : "#16a34a",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "2px 7px",
+                        borderRadius: 999,
+                        minWidth: 20,
+                        textAlign: "center",
+                      }}
+                    >
+                      {getCount(item.label)}
+                    </span>
+                  )}
                 </div>
               );
             })}

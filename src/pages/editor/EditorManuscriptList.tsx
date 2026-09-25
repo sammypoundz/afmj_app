@@ -2,8 +2,9 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Eye, FileText, Download, File, ArrowLeft, X, Loader } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const DOWNLOAD_API = "/api2/download.php";
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface Props {
   title: string;
@@ -58,7 +59,7 @@ const EditorManuscriptList = ({ title, status }: Props) => {
     const fetchManuscripts = async () => {
       try {
         const res = await authFetch(
-          `/api2/editorApi.php?action=listManuscripts&type=${status}`
+          `${API_ORIGIN}/api2/editorApi.php?action=listManuscripts&type=${status}`
         );
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -100,7 +101,7 @@ const EditorManuscriptList = ({ title, status }: Props) => {
     setPreview(null);
     try {
       const res = await authFetch(
-        `/api2/editorApi.php?action=getManuscriptDetails&id=${manuscript.id}`
+        `${API_ORIGIN}/api2/editorApi.php?action=getManuscriptDetails&id=${manuscript.id}`
       );
       if (!res.ok) throw new Error("Failed to load manuscript details");
       const data = await res.json();

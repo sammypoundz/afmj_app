@@ -13,9 +13,10 @@ import {
   Paperclip
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
-const DOWNLOAD_API = "/api2/download.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface Manuscript {
   id: number;

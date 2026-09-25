@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Eye, Calendar, BookOpen, FileText } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
 
 interface PublishedArticle {
   id: number;

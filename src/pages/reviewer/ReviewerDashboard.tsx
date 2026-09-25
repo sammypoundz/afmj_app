@@ -11,9 +11,10 @@ import {
   FileText,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "/api2/reviewerApi.php";
+const API_BASE = `${API_ORIGIN}/api2/reviewerApi.php`;
 
 const ReviewerDashboard = () => {
   const navigate = useNavigate();

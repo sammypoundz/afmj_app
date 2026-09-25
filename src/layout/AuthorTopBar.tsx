@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, ExternalLink, AlertCircle } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
+import { API_ORIGIN } from "../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
-const VERIFY_API = "/api2/verify_status.php";
-const REGISTER_API = "/api2/register.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
+const VERIFY_API = `${API_ORIGIN}/api2/verify_status.php`;
+const REGISTER_API = `${API_ORIGIN}/api2/register.php`;
 
 interface UserInfo {
   id: number;

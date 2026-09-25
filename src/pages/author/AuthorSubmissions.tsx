@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path as needed
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
 
 interface Submission {
   id: string;            // manuscript slug

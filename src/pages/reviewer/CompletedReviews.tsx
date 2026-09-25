@@ -3,10 +3,11 @@ import { RotateCcw, Eye, Download, X, ChevronLeft, ChevronRight, Paperclip } fro
 import { useAuth } from "../../contexts/AuthContext";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API = "/api2/reviewerApi.php";
+const API = `${API_ORIGIN}/api2/reviewerApi.php`;
 // const API = "/api/reviewerApi.php";
-const DOWNLOAD_API = "/api2/download.php";
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface CompletedItem {
   id: number;

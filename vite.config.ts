@@ -1,31 +1,23 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: "/dev/",
   server: {
     proxy: {
+      // Online server: https://pkluster.online/api2/*
       '/api2': {
         target: 'https://pkluster.online',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api2/, '/api2'),
-        timeout: 60000,
-        proxyTimeout: 60000,
+        secure: false, // set to true if the cert is valid and you want strict TLS
       },
+
+      // Online server: https://pkluster.online/api/*
       '/api': {
         target: 'https://pkluster.online',
         changeOrigin: true,
-        // Increase timeout to 60 seconds (default is often 30s)
-        timeout: 60000,           // in milliseconds
-        proxyTimeout: 60000,      // additional for some environments
-        // Optional: log proxy events for debugging (uncomment if needed)
-        // configure: (proxy) => {
-        //   proxy.on('error', (err) => console.log('proxy error', err));
-        //   proxy.on('proxyReq', (_, req) => console.log('Sending Request:', req.method, req.url));
-        //   proxy.on('proxyRes', (_, res) => console.log('Received Response:', res.statusCode));
-        // }
-      }
-    }
-  }
+        secure: false,
+      },
+    },
+  },
 });

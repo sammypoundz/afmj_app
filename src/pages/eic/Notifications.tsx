@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, FileText, Mail, CreditCard, X, CheckCheck, Reply } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
 interface Notification {
   id: number;
@@ -28,7 +29,7 @@ const typeDisplay: Record<string, { label: string; icon: React.ElementType }> = 
   'ticket-received':      { label: 'Ticket from Author', icon: Mail },
 };
 
-const NOTIF_API = "/api2/EICnotificationsAPI.php";
+const NOTIF_API = `${API_ORIGIN}/api2/EICnotificationsAPI.php`;
 
 const Notifications: FC = () => {
   const navigate = useNavigate();

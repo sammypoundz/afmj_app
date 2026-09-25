@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { API_ORIGIN } from "../apiConfig";
 
-const API_FORGOT = '/api2/forgot-password.php';
-const API_RESET = '/api2/reset-password.php';
+const API_FORGOT = `${API_ORIGIN}/api2/forgot-password.php`;
+const API_RESET = `${API_ORIGIN}/api2/reset-password.php`;
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 interface PasswordValidation {

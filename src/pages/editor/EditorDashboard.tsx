@@ -12,6 +12,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
 interface DashboardStats {
   totalAssigned: number;
@@ -50,8 +51,8 @@ const EditorDashboard = () => {
     const fetchDashboard = async () => {
       try {
         const [statsRes, pendingRes] = await Promise.all([
-          authFetch("/api2/editorApi.php?action=getDashboardStats"),
-          authFetch("/api2/editorApi.php?action=getPendingActions"),
+          authFetch(`${API_ORIGIN}/api2/editorApi.php?action=getDashboardStats`),
+          authFetch(`${API_ORIGIN}/api2/editorApi.php?action=getPendingActions`),
         ]);
 
         if (!statsRes.ok || !pendingRes.ok) {

@@ -23,9 +23,10 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/authorApi.php";
-const DOWNLOAD_API = "/api2/download.php";
+const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
+const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
 
 interface DashboardStats {
   totalSubmissions: number;
@@ -424,6 +425,10 @@ const AuthorDashboard = () => {
         return <span style={styles.badge("info")}>Submitted</span>;
       case "under_review":
         return <span style={styles.badge("success")}>Under Review</span>;
+      case "revision_requested":
+        return <span style={styles.badge("warning")}>Revision Requested</span>;
+      case "revised":
+        return <span style={styles.badge("info")}>Revised</span>;
       case "accepted":
         return <span style={styles.badge("success")}>Accepted</span>;
       case "rejected":

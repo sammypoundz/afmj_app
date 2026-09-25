@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { API_ORIGIN } from "../apiConfig";
 
-const API_REGISTER = '/api2/register.php';
+const API_REGISTER = `${API_ORIGIN}/api2/register.php`;
 const LOGO_URL = 'https://www.afmjonline.com/pages/user/images/logo.png';
 
 interface RegisterFormData {

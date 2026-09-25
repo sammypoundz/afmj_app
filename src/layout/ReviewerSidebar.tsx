@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
 import { reviewerMenu } from "./reviewerMenu";
+import { useSidebarCounts } from "./useSidebarCounts";
 
 interface DashboardStats {
   invitations: number;
@@ -12,45 +12,26 @@ interface DashboardStats {
   overdue: number;
 }
 
-const API_BASE = "/api2/reviewerApi.php";
-// const API_BASE = "/api/reviewerApi.php";
 const LOGO_URL = "https://www.afmjonline.com/pages/user/images/logo.png";
 const FAVICON_URL = "https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg";
 
 const ReviewerSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const { counts: countsRaw } = useSidebarCounts<DashboardStats>("reviewer");
+  const stats: DashboardStats | null =
+    Object.keys(countsRaw).length > 0
+      ? ({
+          invitations: 0,
+          active: 0,
+          revisions: 0,
+          completed: 0,
+          overdue: 0,
+          ...countsRaw,
+        } as DashboardStats)
+      : null;
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { authFetch, sessionId } = useAuth();
-  const intervalRef = useRef<number | null>(null);
-
-  const fetchStats = async () => {
-    if (!sessionId) return;
-    try {
-      const response = await authFetch(`${API_BASE}?action=getDashboardStats`);
-      if (!response.ok) {
-        if (response.status === 401) navigate("/login");
-        throw new Error("Failed to fetch stats");
-      }
-      const data: DashboardStats = await response.json();
-      setStats(data);
-    } catch (err) {
-      console.error("Error fetching dashboard stats:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (sessionId) {
-      fetchStats();
-      intervalRef.current = setInterval(fetchStats, 30000);
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, authFetch, navigate]);
 
   const getPath = (label: string) => {
     const paths: Record<string, string> = {

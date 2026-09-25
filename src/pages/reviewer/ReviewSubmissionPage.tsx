@@ -3,9 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
+import { API_ORIGIN } from "../../apiConfig"
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "/api2/reviewerApi.php";
+const API_BASE = `${API_ORIGIN}/api2/reviewerApi.php`;
 
 // Spinner component (green theme)
 const Spinner = ({ size = 20, color = "#16a34a" }) => (

@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import debounce from "lodash/debounce";
 import toast, { Toaster } from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
-const API_BASE = "/api2/EICUsersApi.php";
+const API_BASE = `${API_ORIGIN}/api2/EICUsersApi.php`;
 
 // ================= Types =================
 interface PastReview {

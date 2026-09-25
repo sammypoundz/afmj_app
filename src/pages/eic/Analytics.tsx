@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { LineChart, PieChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Line, Pie, Cell } from "recharts";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../../apiConfig"
 
 const Analytics = () => {
   const { authFetch } = useAuth();
@@ -21,7 +22,7 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const res = await authFetch("/api2/analyticsApi.php?action=getData");
+        const res = await authFetch(`${API_ORIGIN}/api2/analyticsApi.php?action=getData`);
         if (!res.ok) throw new Error("Failed to fetch analytics");
         const data = await res.json();
         setSummary(data.summary);

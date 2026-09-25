@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, BookOpen, Target, CheckCircle, User, X, Calendar, Clock, Download } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
+import { API_ORIGIN } from "../../apiConfig"
 
 // const API_BASE = "/api/reviewerApi.php";
-const API_BASE = "/api2/reviewerApi.php";
+const API_BASE = `${API_ORIGIN}/api2/reviewerApi.php`;
 
 interface OverdueReview {
   id: number;

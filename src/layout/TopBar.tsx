@@ -5,11 +5,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import debounce from "lodash/debounce";
 import toast from "react-hot-toast";
+import { API_ORIGIN } from "../apiConfig"
 
-const API_BASE = "/api2/EICmanusciptsapi.php";
-const NOTIF_API = "/api2/EICnotificationsAPI.php";
-const VERIFY_API = "/api2/verify_status.php";
-const REGISTER_API = "/api2/register.php";
+const API_BASE = `${API_ORIGIN}/api2/EICmanusciptsapi.php`;
+const NOTIF_API = `${API_ORIGIN}/api2/EICnotificationsAPI.php`;
+const VERIFY_API = `${API_ORIGIN}/api2/verify_status.php`;
+const REGISTER_API = `${API_ORIGIN}/api2/register.php`;
 
 interface Notification {
   id: number;
