@@ -6,34 +6,42 @@ import react from '@vitejs/plugin-react';
 //
 // Dev  (npm run dev):
 //   App served at http://localhost:5173/dev/
-//   /api2/*  → https://pkluster.online/api2/*
-//   /api/*   → https://pkluster.online/api/*
+//   /api2/<path>  →  https://pkluster.online/api2/<path>
+//   /api/<path>   →  https://pkluster.online/api/<path>
 //
 // Prod (npm run build):
-//   App deployed under /dev/ on the production host.
-//   Assets referenced as /dev/assets/...
+//   App deployed under /dev/ on afmjonline.com.
+//   In prod the app calls https://pkluster.online/api2/* directly (see
+//   src/apiConfig.ts) — cross-origin, so pkluster must send CORS headers.
+//   The /dev/.htaccess on afmjonline.com only handles SPA routing; the
+//   "IfModule mod_rewrite" guard on `api2`/`api` below keeps those paths
+//   working if a proxy is ever added there.
+//
+// Front-end convention (all files use this):
+//   const API_LOGIN = `${API_ORIGIN}/api2/login.php`;
+//   API_ORIGIN = "" in dev (proxied), "https://pkluster.online" in prod.
 //
 // NOTE: React Router's `basename` must match `base`:
 //   <BrowserRouter basename="/dev">
 // ---------------------------------------------------------------------
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   plugins: [react()],
 
-  // Dev: serve under /dev/ so Router basename="/dev" matches.
-  // Prod: emit asset URLs prefixed with /dev/.
   base: '/dev/',
 
   server: {
     proxy: {
-      // Online server: https://pkluster.online/api2/*
+      // /api2/* → https://pkluster.online/api2/*
+      // No rewrite. The incoming path already includes /api2 and the
+      // target expects the /api2 prefix too.
       '/api2': {
         target: 'https://pkluster.online',
         changeOrigin: true,
-        secure: false, // set to true if the cert is trusted
+        secure: false,
       },
 
-      // Online server: https://pkluster.online/api/*
+      // /api/* → https://pkluster.online/api/*
       '/api': {
         target: 'https://pkluster.online',
         changeOrigin: true,
@@ -41,4 +49,4 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}));
+});

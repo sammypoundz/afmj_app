@@ -140,6 +140,108 @@ export const useEicManuscriptCounts = (pollMs = 30000) => {
   return { counts, refreshCounts };
 };
 
+/**
+ * Publication pipeline counts — fetched from the EXACT same endpoint and types
+ * the Publication page (Publications.tsx) uses, so the dashboard cards can
+ * never drift out of sync with the publication tabs:
+ *   pendingDecision     → type=pending
+ *   payment             → type=payment
+ *   galleyProof         → type=galley
+ *   awaitingPublication → type=awaiting
+ */
+const PUBLICATION_API = `${API_ORIGIN}/api2/EICpublicationApi.php`;
+
+const PUBLICATION_TYPES = {
+  pendingDecision: "pending",
+  payment: "payment",
+  galleyProof: "galley",
+  awaitingPublication: "awaiting",
+} as const;
+
+export type PublicationPipelineCounts = Record<keyof typeof PUBLICATION_TYPES, number>;
+
+let publicationCache: { counts: PublicationPipelineCounts; ts: number } | null = null;
+let publicationInFlight: Promise<PublicationPipelineCounts> | null = null;
+const PUBLICATION_TTL = 30000;
+
+const fetchPublicationPipelineCounts = async (
+  force = false,
+): Promise<PublicationPipelineCounts> => {
+  const now = Date.now();
+  if (!force && publicationCache && now - publicationCache.ts < PUBLICATION_TTL) {
+    return publicationCache.counts;
+  }
+  if (publicationInFlight) return publicationInFlight;
+
+  publicationInFlight = (async () => {
+    const entries = await Promise.all(
+      (Object.keys(PUBLICATION_TYPES) as (keyof typeof PUBLICATION_TYPES)[]).map(
+        async (key) => {
+          try {
+            const res = await fetch(
+              `${PUBLICATION_API}?action=list&type=${PUBLICATION_TYPES[key]}`,
+            );
+            if (!res.ok) return [key, 0] as const;
+            const data = await res.json();
+            return [key, Array.isArray(data) ? data.length : 0] as const;
+          } catch {
+            return [key, 0] as const;
+          }
+        },
+      ),
+    );
+    const counts = Object.fromEntries(entries) as PublicationPipelineCounts;
+    publicationCache = { counts, ts: Date.now() };
+    return counts;
+  })();
+
+  try {
+    return await publicationInFlight;
+  } finally {
+    publicationInFlight = null;
+  }
+};
+
+export const usePublicationPipelineCounts = (pollMs = 30000) => {
+  const location = useLocation();
+  const [counts, setCounts] = useState<PublicationPipelineCounts>({
+    pendingDecision: 0,
+    payment: 0,
+    galleyProof: 0,
+    awaitingPublication: 0,
+  });
+
+  const refreshCounts = useCallback((force = false) => {
+    fetchPublicationPipelineCounts(force).then(setCounts).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshCounts();
+
+    const onRefresh = () => refreshCounts(true);
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refreshCounts();
+    };
+
+    window.addEventListener(SIDEBAR_REFRESH_EVENT, onRefresh);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refreshCounts();
+    }, pollMs);
+
+    return () => {
+      window.removeEventListener(SIDEBAR_REFRESH_EVENT, onRefresh);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      clearInterval(interval);
+    };
+  }, [refreshCounts, location.pathname, pollMs]);
+
+  return { counts, refreshCounts };
+};
+
 export const useSidebarCounts = <T extends object>(
   role: Role,
   pollMs = 30000,

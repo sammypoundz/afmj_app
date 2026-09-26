@@ -3,6 +3,10 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { API_ORIGIN } from "../../apiConfig"
 import {
+  useEicManuscriptCounts,
+  usePublicationPipelineCounts,
+} from "../../layout/useSidebarCounts";
+import {
   FileText,
   Clock,
   CheckCircle,
@@ -17,6 +21,7 @@ import {
   Building2,
   FileEdit,
   FileCheck,
+  CreditCard,
 } from "lucide-react";
 
 interface DashboardData {
@@ -54,6 +59,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Counters use the EXACT same API as the sidebar badges so they can never
+  // disagree with the category pages. Non-counter panels still come from
+  // dashboard.php below.
+  const { counts: manuscriptCounts } = useEicManuscriptCounts();
+  // Publication pipeline counters — same API as the Publication page tabs
+  const { counts: publicationCounts } = usePublicationPipelineCounts();
+
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -88,45 +100,72 @@ const Dashboard = () => {
   const stats = [
     {
       label: "Total Submissions",
-      value: data.kpi.total_submissions ?? 0,
+      value: manuscriptCounts["New Submissions"] ?? 0,
       icon: FileText,
       path: "/eic/manuscripts",
     },
     {
       label: "Under Review",
-      value: data.kpi.under_review ?? 0,
+      value: manuscriptCounts["Under Review"] ?? 0,
       icon: Clock,
       path: "/eic/manuscripts/under-review",
     },
     {
       label: "Revisions",
-      value: data.kpi.revisions ?? 0,
+      value: manuscriptCounts["Revisions"] ?? 0,
       icon: FileEdit,
       path: "/eic/manuscripts/revisions",
     },
     {
       label: "Accepted",
-      value: data.kpi.accepted ?? 0,
+      value: manuscriptCounts["Accepted"] ?? 0,
       icon: CheckCircle,
       path: "/eic/manuscripts/accepted",
     },
     {
       label: "Gallery Proof",
-      value: data.kpi.gallery_proof ?? 0,
+      value: manuscriptCounts["Revised"] ?? 0,
       icon: FileCheck,
       path: "/eic/manuscripts/gallery-proof",
     },
     {
       label: "Rejected",
-      value: data.kpi.rejected ?? 0,
+      value: manuscriptCounts["Rejected"] ?? 0,
       icon: XCircle,
       path: "/eic/manuscripts/rejected",
     },
     {
       label: "Published",
-      value: data.kpi.published ?? 0,
+      value: manuscriptCounts["Published"] ?? 0,
       icon: UploadCloud,
       path: "/eic/publications/published", // matches route "publications/published"
+    },
+  ];
+
+  const publicationPipeline = [
+    {
+      label: "Pending Decision",
+      value: publicationCounts.pendingDecision ?? 0,
+      icon: CheckCircle,
+      path: "/eic/publications/decision",
+    },
+    {
+      label: "Payment",
+      value: publicationCounts.payment ?? 0,
+      icon: CreditCard,
+      path: "/eic/publications/decision",
+    },
+    {
+      label: "Galley Proof",
+      value: publicationCounts.galleyProof ?? 0,
+      icon: FileCheck,
+      path: "/eic/publications/decision",
+    },
+    {
+      label: "Awaiting Publication",
+      value: publicationCounts.awaitingPublication ?? 0,
+      icon: UploadCloud,
+      path: "/eic/publications/decision",
     },
   ];
 
@@ -241,6 +280,33 @@ const Dashboard = () => {
                   <div className="kpi-content">
                     <h2>{stat.value}</h2>
                     <p>{stat.label}</p>
+                  </div>
+                  <div className="kpi-trend">
+                    <TrendingUp size={14} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="metrics-section">
+          <h2 className="section-title section-title-light">Publication Pipeline</h2>
+          <div className="kpi-modern-grid">
+            {publicationPipeline.map((card) => {
+              const Icon = card.icon;
+              return (
+                <div
+                  key={card.label}
+                  className="kpi-modern-card clickable"
+                  onClick={() => navigate(card.path)}
+                >
+                  <div className="kpi-icon">
+                    <Icon size={22} />
+                  </div>
+                  <div className="kpi-content">
+                    <h2>{card.value}</h2>
+                    <p>{card.label}</p>
                   </div>
                   <div className="kpi-trend">
                     <TrendingUp size={14} />
