@@ -2123,7 +2123,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const [tempEditorId, setTempEditorId] = useState<number | null>(null);
   const [tempReviewers, setTempReviewers] = useState<string[]>([]);
   const [reassignTarget, setReassignTarget] = useState<{ manuscriptId: number; oldReviewerId: number; oldReviewerName: string } | null>(null);
-  const [downloadingFile, setDownloadingFile] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailDecision, setEmailDecision] = useState<"reject" | "revision" | "accept" | null>(null);
@@ -2329,8 +2329,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
     }
   };
 
-  const handleDownload = async (filePath: string, fileNameBase: string) => {
-    setDownloadingFile(true);
+  const handleDownload = async (filePath: string, fileNameBase: string, fileKey: string = "main") => {
+    setDownloadingFile(fileKey);
     toast.info("Download started...");
     try {
       const downloadUrl = `${DOWNLOAD_API}?file=${encodeURIComponent(filePath)}`;
@@ -2357,7 +2357,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
       console.error("Download failed:", error);
       toast.error("Download failed");
     } finally {
-      setDownloadingFile(false);
+      setDownloadingFile(null);
     }
   };
 
@@ -2576,8 +2576,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 if (primaryFile) {
                   return (
                     <button
-                      onClick={() => handleDownload(primaryFile, `AFMJ_${manuscript.id}_published`)}
-                      disabled={downloadingFile}
+                      onClick={() => handleDownload(primaryFile, `AFMJ_${manuscript.id}_published`, "published")}
+                      disabled={downloadingFile === "published"}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -2592,8 +2592,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
                       onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
                     >
-                      {downloadingFile ? <Spinner /> : <Download size={16} />}
-                      {downloadingFile ? "Downloading..." : "Download Published File"}
+                      {downloadingFile === "published" ? <Spinner /> : <Download size={16} />}
+                      {downloadingFile === "published" ? "Downloading..." : "Download Published File"}
                     </button>
                   );
                 }
@@ -2614,8 +2614,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 <div>
                   {manuscript.filePath ? (
                     <button
-                      onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}`)}
-                      disabled={downloadingFile}
+                      onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}`, "current")}
+                      disabled={downloadingFile === "current"}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -2630,8 +2630,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                       onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
                       onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
                     >
-                      {downloadingFile ? <Spinner /> : <Download size={16} />}
-                      {downloadingFile ? "Downloading..." : "Download Current File"}
+                      {downloadingFile === "current" ? <Spinner /> : <Download size={16} />}
+                      {downloadingFile === "current" ? "Downloading..." : "Download Current File"}
                     </button>
                   ) : (
                     <span style={{ color: "#6c757d" }}>No file uploaded yet.</span>
@@ -2648,8 +2648,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 </h4>
                 <div>
                   <button
-                    onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}`)}
-                    disabled={downloadingFile}
+                    onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}`, "main")}
+                    disabled={downloadingFile === "main"}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -2664,8 +2664,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                     onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
                   >
-                    {downloadingFile ? <Spinner /> : <Download size={16} />}
-                    {downloadingFile ? "Downloading..." : "Download Main Manuscript"}
+                    {downloadingFile === "main" ? <Spinner /> : <Download size={16} />}
+                    {downloadingFile === "main" ? "Downloading..." : "Download Main Manuscript"}
                   </button>
                 </div>
               </div>
@@ -2679,8 +2679,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 </h4>
                 <div>
                   <button
-                    onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}_original`)}
-                    disabled={downloadingFile}
+                    onClick={() => handleDownload(manuscript.filePath!, `AFMJ_${manuscript.id}_original`, "original")}
+                    disabled={downloadingFile === "original"}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -2695,8 +2695,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                     onMouseEnter={(e) => e.currentTarget.style.background = "#dee2e6"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "#e9ecef"}
                   >
-                    {downloadingFile ? <Spinner /> : <Download size={16} />}
-                    {downloadingFile ? "Downloading..." : "Download Original Manuscript"}
+                    {downloadingFile === "original" ? <Spinner /> : <Download size={16} />}
+                    {downloadingFile === "original" ? "Downloading..." : "Download Original Manuscript"}
                   </button>
                 </div>
               </div>
@@ -2743,8 +2743,8 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                   <div>
                     <div style={{ fontWeight: 500, marginBottom: "8px" }}>Current File:</div>
                     <button
-                      onClick={() => handleDownload(manuscript.circulatingFilePath!, `AFMJ_${manuscript.id}_circulating`)}
-                      disabled={downloadingFile}
+                      onClick={() => handleDownload(manuscript.circulatingFilePath!, `AFMJ_${manuscript.id}_circulating`, "circulating")}
+                      disabled={downloadingFile === "circulating"}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -2756,7 +2756,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                         cursor: "pointer",
                       }}
                     >
-                      {downloadingFile ? <Spinner /> : <Download size={16} />}
+                      {downloadingFile === "circulating" ? <Spinner /> : <Download size={16} />}
                       Download Current Circulating File
                     </button>
                   </div>
@@ -3407,7 +3407,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                           Reviewer Attachment
                         </div>
                         <button
-                          onClick={() => handleDownload(progress.attachment!, `reviewer_attachment_${progress.reviewerId}`)}
+                          onClick={() => handleDownload(progress.attachment!, `reviewer_attachment_${progress.reviewerId}`, `attach_${progress.reviewerId}`)}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
