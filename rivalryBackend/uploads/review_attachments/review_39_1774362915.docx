@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script type="module">import { injectIntoGlobalHook } from "/dev/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/dev/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
+    <link rel="icon" type="image/jpeg" href="https://www.afmjonline.com/pages/user/images/images%20(2)_1675592375901.jpeg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>amj-jms</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/dev/src/main.tsx"></script>
+  </body>
+</html>

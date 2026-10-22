@@ -110,6 +110,7 @@ const ReviewerSidebar = () => {
       }
       .sidebar {
         transition: width 0.2s ease;
+        flex-shrink: 0;
       }
       .sidebar.collapsed {
         width: 80px;

@@ -181,6 +181,7 @@ const EditorSidebar: FC = () => {
           borderRight: "1px solid rgba(22,163,74,0.12)",
           minHeight: "100vh",
           overflowX: "hidden",
+          flexShrink: 0,
           transition: "width 0.2s ease, transform 0.3s ease",
         }}
       >

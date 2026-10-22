@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FC, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle, FileText, ArrowLeft, Paperclip, Download, Eye, Save } from "lucide-react";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -49,6 +49,12 @@ const GlobalStyles = () => (
   `}</style>
 );
 
+interface UserOption {
+  id: number;
+  name: string;
+  email?: string;
+}
+
 interface Manuscript {
   id: number;
   manuscriptId: string;
@@ -73,17 +79,24 @@ interface Manuscript {
   studyType?: string;
   keywords?: string;
   galleyProofCreatedAt?: string; // new field
+  publishedDate?: string;
+  publicationFile?: string;
+  authorName?: string;
+  views?: number;
+  downloads?: number;
 }
 
 const Publication: FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { authFetch } = useAuth();
   const [pendingList, setPendingList] = useState<Manuscript[]>([]);
   const [paymentList, setPaymentList] = useState<Manuscript[]>([]);
   const [galleyList, setGalleyList] = useState<Manuscript[]>([]);
   const [awaitingList, setAwaitingList] = useState<Manuscript[]>([]);
+  const [publishedList, setPublishedList] = useState<Manuscript[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pending" | "payment" | "galleyProof" | "awaiting">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "payment" | "galleyProof" | "awaiting" | "published">("pending");
   const [selectedManuscript, setSelectedManuscript] = useState<Manuscript | null>(null);
   const [paymentAmountNgn, setPaymentAmountNgn] = useState<number>(0);
   const [paymentAmountUsd, setPaymentAmountUsd] = useState<number>(0);
@@ -110,6 +123,33 @@ const Publication: FC = () => {
   const [submittingForPublication, setSubmittingForPublication] = useState<number | null>(null);
   const [sendingToAuthor, setSendingToAuthor] = useState(false);
   const [publishingFromAwaiting, setPublishingFromAwaiting] = useState<number | null>(null);
+  // Publish is only allowed after publication data has been saved for the
+  // currently open awaiting-publication manuscript.
+  const [savedManuscriptId, setSavedManuscriptId] = useState<number | null>(null);
+
+  // ==================== Offline publication sync state ====================
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [offlineSaving, setOfflineSaving] = useState(false);
+  const [offlineUploading, setOfflineUploading] = useState(false);
+  const [offlineFile, setOfflineFile] = useState<File | null>(null);
+  const [userLists, setUserLists] = useState<
+    { authors: UserOption[]; editors: UserOption[]; reviewers: UserOption[] }
+  >({ authors: [], editors: [], reviewers: [] });
+  const [offlineForm, setOfflineForm] = useState({
+    title: "",
+    authors: "",
+    author_id: "",
+    editor_id: "",
+    reviewer_id: "",
+    study_type: "",
+    keywords: "",
+    abstract: "",
+    objective: "",
+    methods: "",
+    results: "",
+    conclusion: "",
+    published_at: "",
+  });
 
   const getApiType = (tab: string) => {
     if (tab === "galleyProof") return "galley";
@@ -120,13 +160,19 @@ const Publication: FC = () => {
   const fetchTabData = async (tab: string) => {
     const type = getApiType(tab);
     try {
-      const res = await fetch(`${API_BASE}?action=list&type=${type}`);
+      // Published manuscripts use a dedicated endpoint that returns published
+      // records (with publication_file) for editing/republishing.
+      const url = tab === "published"
+        ? `${API_BASE}?action=listPublished`
+        : `${API_BASE}?action=list&type=${type}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (res.ok) {
         if (tab === "pending") setPendingList(data);
         else if (tab === "payment") setPaymentList(data);
         else if (tab === "galleyProof") setGalleyList(data);
         else if (tab === "awaiting") setAwaitingList(data);
+        else if (tab === "published") setPublishedList(data);
         toast.success(`Loaded ${data.length} manuscript(s) for ${tab}`);
       } else {
         console.error(`Failed to load ${tab} manuscripts:`, data.error);
@@ -146,16 +192,34 @@ const Publication: FC = () => {
         fetchTabData("payment"),
         fetchTabData("galleyProof"),
         fetchTabData("awaiting"),
+        fetchTabData("published"),
       ]);
       setLoading(false);
     };
     fetchAll();
   }, []);
 
+  // Coming from the Published page: auto-open the edit/republish modal for
+  // the requested manuscript and clean the URL afterwards.
+  useEffect(() => {
+    const editId = searchParams.get("editPublished");
+    if (!editId || loading || publishedList.length === 0) return;
+    const target = publishedList.find((m) => String(m.id) === editId);
+    if (target) {
+      setActiveTab("published");
+      openPublishedModal(target);
+    } else {
+      toast.error("Published manuscript not found");
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, publishedList]);
+
   const refreshPending = () => fetchTabData("pending");
   const refreshPayment = () => fetchTabData("payment");
   const refreshGalley = () => fetchTabData("galleyProof");
   const refreshAwaiting = () => fetchTabData("awaiting");
+  const refreshPublished = () => fetchTabData("published");
 
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -334,6 +398,7 @@ const Publication: FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save changes");
       toast.success("Publication data updated successfully!");
+      setSavedManuscriptId(manuscript.id);
       await refreshAwaiting();
       if (selectedManuscript) {
         setSelectedManuscript({
@@ -354,6 +419,10 @@ const Publication: FC = () => {
     } finally {
       setSavingPublicationData(false);
     }
+  };
+
+  const lockSaved = (id: number) => {
+    if (savedManuscriptId === id) setSavedManuscriptId(null);
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -406,6 +475,8 @@ const Publication: FC = () => {
 
   const openAwaitingModal = (m: Manuscript) => {
     setSelectedManuscript(m);
+    // Require a fresh save before Publish is available for this manuscript
+    setSavedManuscriptId(null);
     setEditTitle(m.title || "");
     setEditAuthors(m.authors || "");
     setEditKeywords(m.keywords || "");
@@ -415,6 +486,178 @@ const Publication: FC = () => {
     setEditMethods(m.methods || "");
     setEditResults(m.results || "");
     setEditConclusion(m.conclusion || "");
+  };
+
+  // ==================== Edit published manuscript state ====================
+  const [showPublishedModal, setShowPublishedModal] = useState(false);
+  const [editingPublished, setEditingPublished] = useState<Manuscript | null>(null);
+  const [publishedFile, setPublishedFile] = useState<File | null>(null);
+  const [publishedPublishedAt, setPublishedPublishedAt] = useState<string>("");
+  const [savingPublished, setSavingPublished] = useState(false);
+  const [publishedUploading, setPublishedUploading] = useState(false);
+
+  const openPublishedModal = (m: Manuscript) => {
+    setEditingPublished(m);
+    setPublishedFile(null);
+    setPublishedPublishedAt(m.publishedDate ? m.publishedDate.slice(0, 10) : "");
+    setEditTitle(m.title || "");
+    setEditAuthors(m.authors || "");
+    setEditKeywords(m.keywords || "");
+    setEditStudyType(m.studyType || "");
+    setEditAbstract(m.abstract || "");
+    setEditObjective(m.objective || "");
+    setEditMethods(m.methods || "");
+    setEditResults(m.results || "");
+    setEditConclusion(m.conclusion || "");
+    setShowPublishedModal(true);
+  };
+
+  const handlePublishedFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = e.target.files[0];
+      if (selected.type !== "application/pdf") {
+        toast.error("Only PDF files are allowed.");
+        return;
+      }
+      setPublishedFile(selected);
+    }
+  };
+
+  const savePublishedChanges = async () => {
+    if (!editingPublished) return;
+    if (!editTitle.trim()) { toast.error("Title is required"); return; }
+
+    setSavingPublished(true);
+    try {
+      let publicationFilePath: string | null = null;
+      if (publishedFile) {
+        setPublishedUploading(true);
+        publicationFilePath = await uploadFile(publishedFile);
+        setPublishedUploading(false);
+      }
+
+      const payload: Record<string, unknown> = {
+        manuscript_id: editingPublished.id,
+        title: editTitle,
+        authors: editAuthors,
+        keywords: editKeywords,
+        study_type: editStudyType,
+        abstract: editAbstract,
+        objective: editObjective,
+        methods: editMethods,
+        results: editResults,
+        conclusion: editConclusion,
+      };
+      if (publicationFilePath) payload.publication_file = publicationFilePath;
+      if (publishedPublishedAt) payload.published_at = publishedPublishedAt;
+
+      const res = await fetch(`${API_BASE}?action=updatePublished`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update published manuscript");
+      toast.success("Published manuscript updated successfully!");
+      setShowPublishedModal(false);
+      setPublishedFile(null);
+      setEditingPublished(null);
+      await refreshPublished();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to update published manuscript");
+    } finally {
+      setPublishedUploading(false);
+      setSavingPublished(false);
+    }
+  };
+
+  // ==================== Offline publication sync ====================
+  const openOfflineModal = async () => {
+    setOfflineForm({
+      title: "",
+      authors: "",
+      author_id: "",
+      editor_id: "",
+      reviewer_id: "",
+      study_type: "",
+      keywords: "",
+      abstract: "",
+      objective: "",
+      methods: "",
+      results: "",
+      conclusion: "",
+      published_at: "",
+    });
+    setOfflineFile(null);
+    setShowOfflineModal(true);
+
+    // Load authors, editors and reviewers for the selects (once per open)
+    try {
+      const [authorsRes, editorsRes, reviewersRes] = await Promise.all([
+        fetch(`${API_ORIGIN}/api2/EICUsersApi.php?action=listAuthors&limit=50&page=1`),
+        fetch(`${API_ORIGIN}/api2/EICUsersApi.php?action=listEditors&limit=50&page=1`),
+        fetch(`${API_ORIGIN}/api2/EICUsersApi.php?action=listReviewers&limit=50&page=1`),
+      ]);
+      const [a, e, r] = await Promise.all([authorsRes.json(), editorsRes.json(), reviewersRes.json()]);
+      const mapList = (d: any): UserOption[] =>
+        (Array.isArray(d) ? d : d?.data || d?.users || []).map((u: any) => ({
+          id: Number(u.id),
+          name: u.name,
+          email: u.email,
+        }));
+      setUserLists({ authors: mapList(a), editors: mapList(e), reviewers: mapList(r) });
+    } catch (err) {
+      console.error("Failed to load users for offline publication", err);
+      toast.error("Could not load author/editor/reviewer lists");
+    }
+  };
+
+  const handleOfflineFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = e.target.files[0];
+      if (selected.type !== "application/pdf") {
+        toast.error("Only PDF files are allowed for publication.");
+        return;
+      }
+      setOfflineFile(selected);
+    }
+  };
+
+  const handleOfflinePublish = async () => {
+    if (!offlineForm.title.trim()) { toast.error("Title is required"); return; }
+    if (!offlineForm.author_id) { toast.error("Please select the author"); return; }
+    if (!offlineFile) { toast.error("Please select the final publication PDF"); return; }
+
+    setOfflineSaving(true);
+    try {
+      setOfflineUploading(true);
+      const filePath = await uploadFile(offlineFile);
+      setOfflineUploading(false);
+
+      const res = await fetch(`${API_BASE}?action=offlinePublish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...offlineForm,
+          publication_file: filePath,
+          author_id: Number(offlineForm.author_id),
+          editor_id: offlineForm.editor_id || null,
+          reviewer_id: offlineForm.reviewer_id || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to sync offline publication");
+      toast.success("Offline manuscript synced and published!");
+      setShowOfflineModal(false);
+      await refreshAwaiting();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to sync offline publication");
+    } finally {
+      setOfflineUploading(false);
+      setOfflineSaving(false);
+    }
   };
 
   // Helper: compute days since galley proof sent
@@ -430,6 +673,7 @@ const Publication: FC = () => {
     activeTab === "pending" ? pendingList :
     activeTab === "payment" ? paymentList :
     activeTab === "galleyProof" ? galleyList :
+    activeTab === "published" ? publishedList :
     awaitingList;
 
   const cardStyle = {
@@ -440,6 +684,11 @@ const Publication: FC = () => {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap" as const,
+    gap: "12px",
+    minWidth: 0,
+    width: "100%",
+    boxSizing: "border-box" as const,
     background: "#fff",
     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
     transition: "all 0.2s",
@@ -474,7 +723,7 @@ const Publication: FC = () => {
   );
 
   return (
-    <div className="content" style={{ padding: "24px" }}>
+    <div className="content" style={{ padding: "24px", overflowX: "hidden" }}>
       <GlobalStyles />
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "24px" }}>
@@ -494,6 +743,20 @@ const Publication: FC = () => {
           <ArrowLeft size={28} /> Back
         </button>
         <h1 style={{ margin: 0 }}>Publication Decisions</h1>
+        <button
+          onClick={openOfflineModal}
+          style={{
+            ...buttonStyle,
+            marginLeft: "auto",
+            background: "#7c3aed",
+            color: "#fff",
+            padding: "8px 16px",
+            fontWeight: 600,
+          }}
+          title="Record a manuscript that was processed and published offline"
+        >
+          <FileText size={16} /> Sync Offline Publication
+        </button>
       </div>
 
       <div style={{ display: "flex", gap: "12px", marginBottom: "24px", flexWrap: "wrap" }}>
@@ -502,6 +765,7 @@ const Publication: FC = () => {
           { key: "payment", label: `Payment Status (${paymentList.length})` },
           { key: "galleyProof", label: `Galley Proof (${galleyList.length})` },
           { key: "awaiting", label: `Awaiting Publication (${awaitingList.length})` },
+          { key: "published", label: `Published – Edit (${publishedList.length})` },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -535,7 +799,7 @@ const Publication: FC = () => {
               onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)")}
               onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 6px rgba(0,0,0,0.05)")}
             >
-              <div>
+              <div style={{ minWidth: 0, flex: "1 1 280px", wordBreak: "break-word" }}>
                 <strong style={{ fontSize: "16px" }}>
                   {m.manuscriptId} - {m.title}
                 </strong>
@@ -576,6 +840,11 @@ const Publication: FC = () => {
                 )}
                 {activeTab === "awaiting" && (
                   <small>Ready for publication – upload final PDF and publish.</small>
+                )}
+                {activeTab === "published" && (
+                  <small style={{ color: "#6b7280" }}>
+                    Published {m.publishedDate ? new Date(m.publishedDate).toLocaleDateString() : ""} · {m.views ?? 0} views · {m.downloads ?? 0} downloads
+                  </small>
                 )}
               </div>
 
@@ -622,6 +891,23 @@ const Publication: FC = () => {
                   >
                     <Eye size={16} /> Prepare Publication
                   </button>
+                )}
+
+                {activeTab === "published" && (
+                  <>
+                    <button
+                      onClick={() => downloadFile(m.publicationFile, `published_${m.manuscriptId}`)}
+                      style={{ ...buttonStyle, background: "#f3f4f6", color: "#374151" }}
+                    >
+                      <Download size={16} /> PDF
+                    </button>
+                    <button
+                      onClick={() => openPublishedModal(m)}
+                      style={{ ...buttonStyle, background: "#0d6efd", color: "#fff" }}
+                    >
+                      <Save size={16} /> Edit / Republish
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -959,7 +1245,7 @@ const Publication: FC = () => {
               <input
                 type="text"
                 value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
+                onChange={(e) => { setEditTitle(e.target.value); lockSaved(selectedManuscript.id); }}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -975,7 +1261,7 @@ const Publication: FC = () => {
               <input
                 type="text"
                 value={editAuthors}
-                onChange={(e) => setEditAuthors(e.target.value)}
+                onChange={(e) => { setEditAuthors(e.target.value); lockSaved(selectedManuscript.id); }}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -991,7 +1277,7 @@ const Publication: FC = () => {
               <input
                 type="text"
                 value={editKeywords}
-                onChange={(e) => setEditKeywords(e.target.value)}
+                onChange={(e) => { setEditKeywords(e.target.value); lockSaved(selectedManuscript.id); }}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -1007,7 +1293,7 @@ const Publication: FC = () => {
               <input
                 type="text"
                 value={editStudyType}
-                onChange={(e) => setEditStudyType(e.target.value)}
+                onChange={(e) => { setEditStudyType(e.target.value); lockSaved(selectedManuscript.id); }}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -1022,7 +1308,7 @@ const Publication: FC = () => {
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Abstract</label>
               <textarea
                 value={editAbstract}
-                onChange={(e) => setEditAbstract(e.target.value)}
+                onChange={(e) => { setEditAbstract(e.target.value); lockSaved(selectedManuscript.id); }}
                 rows={4}
                 style={{
                   width: "100%",
@@ -1039,7 +1325,7 @@ const Publication: FC = () => {
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Objective</label>
               <textarea
                 value={editObjective}
-                onChange={(e) => setEditObjective(e.target.value)}
+                onChange={(e) => { setEditObjective(e.target.value); lockSaved(selectedManuscript.id); }}
                 rows={3}
                 style={{
                   width: "100%",
@@ -1056,7 +1342,7 @@ const Publication: FC = () => {
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Methods</label>
               <textarea
                 value={editMethods}
-                onChange={(e) => setEditMethods(e.target.value)}
+                onChange={(e) => { setEditMethods(e.target.value); lockSaved(selectedManuscript.id); }}
                 rows={4}
                 style={{
                   width: "100%",
@@ -1073,7 +1359,7 @@ const Publication: FC = () => {
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Results</label>
               <textarea
                 value={editResults}
-                onChange={(e) => setEditResults(e.target.value)}
+                onChange={(e) => { setEditResults(e.target.value); lockSaved(selectedManuscript.id); }}
                 rows={4}
                 style={{
                   width: "100%",
@@ -1090,7 +1376,7 @@ const Publication: FC = () => {
               <label style={{ fontWeight: 500, display: "block", marginBottom: "6px" }}>Conclusion</label>
               <textarea
                 value={editConclusion}
-                onChange={(e) => setEditConclusion(e.target.value)}
+                onChange={(e) => { setEditConclusion(e.target.value); lockSaved(selectedManuscript.id); }}
                 rows={3}
                 style={{
                   width: "100%",
@@ -1145,18 +1431,386 @@ const Publication: FC = () => {
                 {savingPublicationData ? <Spinner /> : <Save size={16} />}
                 {savingPublicationData ? "Saving..." : "Save Changes"}
               </button>
+            {(() => {
+              const isSaved = savedManuscriptId === selectedManuscript.id;
+              const canPublish = isSaved && !!publicationFile && !publicationUploading && publishingFromAwaiting !== selectedManuscript.id;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <button
+                    onClick={() => publishFromAwaiting(selectedManuscript)}
+                    disabled={!canPublish}
+                    style={{
+                      ...buttonStyle,
+                      background: canPublish ? "#16a34a" : "#9ca3af",
+                      color: "#fff",
+                      cursor: canPublish ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {publicationUploading ? <Spinner /> : <CheckCircle size={16} />}
+                    {publicationUploading ? "Publishing..." : "Publish"}
+                  </button>
+                  {!isSaved && (
+                    <span style={{ fontSize: "11px", color: "#dc2626", marginTop: "2px", textAlign: "center" }}>
+                      Save publication data before publishing
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== Edit / Republish Published Manuscript Modal ==================== */}
+      {showPublishedModal && editingPublished && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "24px",
+              borderRadius: "10px",
+              width: "620px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3 style={{ marginBottom: "4px" }}>
+              Edit Published: {editingPublished.manuscriptId}
+            </h3>
+            <p style={{ color: "#6b7280", fontSize: "13px", marginBottom: "16px" }}>
+              Update the metadata or replace the published PDF and republish. The author will be notified.
+            </p>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Title</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Account Author</label>
+                <input type="text" value={editingPublished.authorName || ""} disabled
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #e5e7eb", background: "#f9fafb" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>All Authors (display)</label>
+                <input type="text" value={editAuthors} onChange={(e) => setEditAuthors(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Study Type</label>
+                <input type="text" value={editStudyType} onChange={(e) => setEditStudyType(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Keywords</label>
+                <input type="text" value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Abstract</label>
+              <textarea value={editAbstract} onChange={(e) => setEditAbstract(e.target.value)} rows={4}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Objective</label>
+                <textarea value={editObjective} onChange={(e) => setEditObjective(e.target.value)} rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Conclusion</label>
+                <textarea value={editConclusion} onChange={(e) => setEditConclusion(e.target.value)} rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Methods</label>
+                <textarea value={editMethods} onChange={(e) => setEditMethods(e.target.value)} rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Results</label>
+                <textarea value={editResults} onChange={(e) => setEditResults(e.target.value)} rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px", cursor: "pointer" }}>
+                  Replace Publication PDF (optional):
+                  <input type="file" accept="application/pdf" onChange={handlePublishedFileChange} style={{ marginTop: "6px", display: "block" }} />
+                </label>
+                {publishedFile && <small style={{ color: "#10b981" }}>New file: {publishedFile.name}</small>}
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Republication Date (optional)</label>
+                <input type="date" value={publishedPublishedAt} onChange={(e) => setPublishedPublishedAt(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
               <button
-                onClick={() => publishFromAwaiting(selectedManuscript)}
-                disabled={!publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id}
+                onClick={() => { setShowPublishedModal(false); setEditingPublished(null); }}
                 style={{
-                  ...buttonStyle,
-                  background: !publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id ? "#9ca3af" : "#16a34a",
-                  color: "#fff",
-                  cursor: !publicationFile || publicationUploading || publishingFromAwaiting === selectedManuscript.id ? "not-allowed" : "pointer",
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
                 }}
               >
-                {publicationUploading ? <Spinner /> : <CheckCircle size={16} />}
-                {publicationUploading ? "Publishing..." : "Publish"}
+                Cancel
+              </button>
+              <button
+                onClick={savePublishedChanges}
+                disabled={savingPublished || publishedUploading}
+                style={{
+                  ...buttonStyle,
+                  background: savingPublished || publishedUploading ? "#9ca3af" : "#0d6efd",
+                  color: "#fff",
+                  cursor: savingPublished || publishedUploading ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {(savingPublished || publishedUploading) ? <Spinner /> : <Save size={16} />}
+                {publishedUploading ? "Uploading..." : savingPublished ? "Saving..." : "Save & Republish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== Offline Publication Sync Modal ==================== */}
+      {showOfflineModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "24px",
+              borderRadius: "10px",
+              width: "620px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3 style={{ marginBottom: "4px" }}>Sync Offline Publication</h3>
+            <p style={{ color: "#6b7280", fontSize: "13px", marginBottom: "16px" }}>
+              Use this when a manuscript was reviewed, accepted and published outside the system (offline). It creates a
+              fully synced published record — select the author, handling editor and reviewer so everything links up.
+            </p>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Title *</label>
+              <input
+                type="text"
+                value={offlineForm.title}
+                onChange={(e) => setOfflineForm({ ...offlineForm, title: e.target.value })}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                placeholder="Manuscript title"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Author (account) *</label>
+                <select
+                  value={offlineForm.author_id}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, author_id: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                >
+                  <option value="">— Select author —</option>
+                  {userLists.authors.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Handling Editor (optional)</label>
+                <select
+                  value={offlineForm.editor_id}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, editor_id: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                >
+                  <option value="">— None —</option>
+                  {userLists.editors.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Reviewer (optional)</label>
+                <select
+                  value={offlineForm.reviewer_id}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, reviewer_id: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                >
+                  <option value="">— None —</option>
+                  {userLists.reviewers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Publication Date (optional)</label>
+                <input
+                  type="date"
+                  value={offlineForm.published_at}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, published_at: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>All Authors (display string)</label>
+              <input
+                type="text"
+                value={offlineForm.authors}
+                onChange={(e) => setOfflineForm({ ...offlineForm, authors: e.target.value })}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                placeholder="e.g., Dr A. Bello, Prof. C. Okonkwo"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Study Type</label>
+                <input
+                  type="text"
+                  value={offlineForm.study_type}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, study_type: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                  placeholder="e.g., Original Research, Case Report"
+                />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Keywords</label>
+                <input
+                  type="text"
+                  value={offlineForm.keywords}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, keywords: e.target.value })}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                  placeholder="comma-separated"
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Abstract</label>
+              <textarea
+                value={offlineForm.abstract}
+                onChange={(e) => setOfflineForm({ ...offlineForm, abstract: e.target.value })}
+                rows={3}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Objective</label>
+                <textarea
+                  value={offlineForm.objective}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, objective: e.target.value })}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Conclusion</label>
+                <textarea
+                  value={offlineForm.conclusion}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, conclusion: e.target.value })}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Methods</label>
+                <textarea
+                  value={offlineForm.methods}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, methods: e.target.value })}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontWeight: 500, display: "block", marginBottom: "4px" }}>Results</label>
+                <textarea
+                  value={offlineForm.results}
+                  onChange={(e) => setOfflineForm({ ...offlineForm, results: e.target.value })}
+                  rows={2}
+                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", fontFamily: "inherit" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ fontWeight: 500, display: "block", marginBottom: "4px", cursor: "pointer" }}>
+                Final Publication PDF * (PDF only):
+                <input type="file" accept="application/pdf" onChange={handleOfflineFileChange} style={{ marginTop: "6px", display: "block" }} />
+              </label>
+              {offlineFile && <small style={{ color: "#10b981" }}>Selected: {offlineFile.name}</small>}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+              <button
+                onClick={() => setShowOfflineModal(false)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOfflinePublish}
+                disabled={offlineSaving || offlineUploading}
+                style={{
+                  ...buttonStyle,
+                  background: offlineSaving || offlineUploading ? "#9ca3af" : "#7c3aed",
+                  color: "#fff",
+                  cursor: offlineSaving || offlineUploading ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {(offlineSaving || offlineUploading) ? <Spinner /> : <CheckCircle size={16} />}
+                {offlineUploading ? "Uploading..." : offlineSaving ? "Syncing..." : "Sync & Publish"}
               </button>
             </div>
           </div>

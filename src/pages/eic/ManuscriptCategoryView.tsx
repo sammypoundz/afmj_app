@@ -794,8 +794,11 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
     ? latestRevision.entries.some(e => !e.addressed)
     : false;
 
+  // The response file is optional on the author side (authorApi only uploads it
+  // when provided), so only the revised manuscript file is required to unlock
+  // reviewer reassignment.
   const filesComplete = latestRevision
-    ? latestRevision.revisedFile && latestRevision.responseFile
+    ? !!latestRevision.revisedFile
     : false;
 
   const canReassign = !hasPending && filesComplete;
@@ -890,7 +893,7 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
             }}
           >
             <Edit3 size={48} style={{ marginBottom: "16px", opacity: 0.5 }} />
-            <p>No revision history available for this manuscript.</p>
+            <p>Awaiting revised Manuscript from the Author</p>
           </div>
         )}
 
@@ -4201,6 +4204,18 @@ const ManuscriptCategoryView: FC = () => {
                               >
                                 <Download size={16} />
                                 <span style={{ marginLeft: "4px" }}>Download</span>
+                              </button>
+                            )}
+
+                            {/* Edit / Continue button for published manuscripts */}
+                            {isPublishedCategory && (
+                              <button
+                                title="Edit / Continue in Publication Decisions"
+                                style={{ ...glassBtnStyle, color: "#fff", background: "#0d6efd", padding: "6px 8px", border: "none" }}
+                                onClick={() => navigate(`/eic/publications/decision?editPublished=${m.id}`)}
+                              >
+                                <Edit3 size={16} />
+                                <span style={{ marginLeft: "4px" }}>Edit / Continue</span>
                               </button>
                             )}
 
