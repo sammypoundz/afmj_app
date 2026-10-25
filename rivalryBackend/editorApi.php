@@ -639,25 +639,45 @@ try {
 
                 // If revision decision, create revision entry
                 if (in_array($decision, ['major_revision', 'minor_revision'])) {
-                    // Find latest revision number
-                    $revStmt = $pdo->prepare("SELECT MAX(revision_number) FROM manuscript_revisions WHERE manuscript_id = ?");
-                    $revStmt->execute([$manuscriptId]);
-                    $maxRev = (int)$revStmt->fetchColumn();
-                    $newRevNum = $maxRev + 1;
-
-                    $insRev = $pdo->prepare("
-                        INSERT INTO manuscript_revisions (manuscript_id, revision_number, submitted_at)
-                        VALUES (?, ?, NOW())
+                    // FLEXIBLE REVISION CYCLE: reuse the currently open
+                    // (unsubmitted) revision row instead of stacking a new one
+                    // each time, so the cycle can repeat indefinitely.
+                    $openRevStmt = $pdo->prepare("
+                        SELECT id FROM manuscript_revisions
+                        WHERE manuscript_id = ? AND revised_file IS NULL
+                        ORDER BY revision_number DESC
+                        LIMIT 1
                     ");
-                    $insRev->execute([$manuscriptId, $newRevNum]);
-                    $revisionId = $pdo->lastInsertId();
+                    $openRevStmt->execute([$manuscriptId]);
+                    $openRev = $openRevStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($openRev) {
+                        $revisionId = (int)$openRev['id'];
+                    } else {
+                        // Find latest revision number
+                        $revStmt = $pdo->prepare("SELECT MAX(revision_number) FROM manuscript_revisions WHERE manuscript_id = ?");
+                        $revStmt->execute([$manuscriptId]);
+                        $maxRev = (int)$revStmt->fetchColumn();
+                        $newRevNum = $maxRev + 1;
+
+                        $insRev = $pdo->prepare("
+                            INSERT INTO manuscript_revisions (manuscript_id, revision_number, submitted_at)
+                            VALUES (?, ?, NOW())
+                        ");
+                        $insRev->execute([$manuscriptId, $newRevNum]);
+                        $revisionId = $pdo->lastInsertId();
+                    }
 
                     // Insert revision entry for the editor (placeholder reviewer_id = editorId)
-                    $entryStmt = $pdo->prepare("
-                        INSERT INTO revision_entries (revision_id, reviewer_id, reviewer_comment, addressed)
-                        VALUES (?, ?, ?, 0)
-                    ");
-                    $entryStmt->execute([$revisionId, $editorId, $comments]);
+                    // Skip the editor placeholder when the editor comment is empty to avoid
+                    // empty "Reviewer Comment" blocks on repeated revision requests.
+                    if ($comments !== '') {
+                        $entryStmt = $pdo->prepare("
+                            INSERT INTO revision_entries (revision_id, reviewer_id, reviewer_comment, addressed)
+                            VALUES (?, ?, ?, 0)
+                        ");
+                        $entryStmt->execute([$revisionId, $editorId, $comments]);
+                    }
 
                     // Pull in reviewer comments from completed reviews that recommended a revision
                     $revEntryStmt = $pdo->prepare("
@@ -677,7 +697,8 @@ try {
                                 AND re2.reviewer_comment = rs.comments_to_author
                           )
                     ");
-                    $revEntryStmt->execute([$revisionId, $manuscriptId, $manuscriptId]);                }
+                    $revEntryStmt->execute([$revisionId, $manuscriptId, $manuscriptId]);
+                }
 
                 // Generate email using the helper
                 $emailContent = generateDecisionEmailBody($manuscriptId, $emailDecision, $comments);

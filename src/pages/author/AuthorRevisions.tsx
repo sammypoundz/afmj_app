@@ -22,6 +22,11 @@ import { API_ORIGIN } from "../../apiConfig"
 
 const API_BASE = `${API_ORIGIN}/api2/authorApi.php`;
 const DOWNLOAD_API = `${API_ORIGIN}/api2/download.php`;
+// Match the server's upload limit (10MB used across the backend upload helpers).
+// Files larger than this are rejected before the request is sent, because once
+// the POST body exceeds post_max_size PHP discards $_FILES entirely and the
+// author only gets a vague "file is required" error.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 interface RevisionHistoryItem {
   revision_number: number;
@@ -390,6 +395,12 @@ const AuthorRevisions = () => {
 
     if (!manuscriptFiles?.revised) {
       toast.error("Please upload the revised manuscript");
+      return;
+    }
+    if (manuscriptFiles.revised.size > MAX_UPLOAD_BYTES) {
+      toast.error(
+        `The revised manuscript is ${(manuscriptFiles.revised.size / (1024 * 1024)).toFixed(1)} MB. Please compress it (reduce image sizes) to under 10 MB and try again.`
+      );
       return;
     }
     if (!message) {

@@ -784,7 +784,28 @@ switch ($action) {
                 errorResponse("Failed to upload revised manuscript", 500);
             }
         } else {
-            errorResponse("Revised manuscript file is required", 400);
+            // Give the author a precise reason instead of a misleading "file is required".
+            // The most common real cause is the file exceeding the server's
+            // upload_max_filesize / post_max_size, which PHP reports as a non-OK
+            // upload error code (or drops $_FILES entirely).
+            $uploadErr = $_FILES['revised_file']['error'] ?? null;
+            if ($uploadErr !== null) {
+                $msgMap = [
+                    UPLOAD_ERR_INI_SIZE   => 'The revised manuscript exceeds the server upload limit. Please reduce the file size (compress images) and try again.',
+                    UPLOAD_ERR_FORM_SIZE  => 'The revised manuscript exceeds the allowed upload size. Please reduce the file size and try again.',
+                    UPLOAD_ERR_PARTIAL    => 'The revised manuscript was only partially uploaded (connection interrupted). Please try again.',
+                    UPLOAD_ERR_NO_FILE    => 'Revised manuscript file is required',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Server misconfiguration: missing temporary upload folder. Contact the administrator.',
+                    UPLOAD_ERR_CANT_WRITE => 'Server could not write the uploaded file. Contact the administrator.',
+                    UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload. Contact the administrator.',
+                ];
+                errorResponse($msgMap[$uploadErr] ?? 'Revised manuscript could not be uploaded (error code ' . $uploadErr . ')', 400);
+            } elseif (!empty($_SERVER['CONTENT_LENGTH']) && empty($_POST) && empty($_FILES)) {
+                // POST body larger than post_max_size: PHP discards $_POST and $_FILES
+                errorResponse('The upload exceeds the server maximum request size. Please compress the revised manuscript (reduce image sizes) and try again.', 400);
+            } else {
+                errorResponse("Revised manuscript file is required", 400);
+            }
         }
 
         $responsePath = null;

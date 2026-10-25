@@ -505,6 +505,7 @@ case "list":
             m.cover_letter_path,
             m.views,
             m.downloads,
+            m.authors AS authors_list,
             u.name AS author_name,
             u.id AS author_id,
             e.name AS editor_name,
@@ -554,8 +555,9 @@ case "list":
             "title"              => $r['title'],
             "slug"               => $r['slug'],
             "studyType"          => $r['study_type'] ?? 'Original Research',
-            "authors"            => $r['author_name'],
+            "authors"            => !empty($r['authors_list']) ? $r['authors_list'] : $r['author_name'],
             "authorId"           => (int)$r['author_id'],
+            "manuscriptId"       => formatManuscriptDisplayId((int)$r['id'], $r['created_at']),
             "editor"             => $r['editor_name'] ?? null,
             "status"             => mapDbStatusToUi($r['status']),
             "date"               => date("Y-m-d", strtotime($r['created_at'])),
@@ -1229,33 +1231,60 @@ case "decision":
     if ($decision === 'revision') {
         $pdo->beginTransaction();
         try {
-            $revNumStmt = $pdo->prepare("
-                SELECT COALESCE(MAX(revision_number), 0) + 1 
-                FROM manuscript_revisions 
-                WHERE manuscript_id = ?
-            ");
-            $revNumStmt->execute([$mid]);
-            $nextRevision = (int)$revNumStmt->fetchColumn();
-
-            $createStmt = $pdo->prepare("
-                INSERT INTO manuscript_revisions 
-                (manuscript_id, revision_number, submitted_at, revised_file, response_file)
-                VALUES (?, ?, NOW(), NULL, NULL)
-            ");
-            $createStmt->execute([$mid, $nextRevision]);
-            // Move out of Under Review until the revision is submitted and reviewers are re-assigned
-            $statusStmt = $pdo->prepare("UPDATE manuscripts SET status = 'revision_requested' WHERE id = ? AND deleted_at IS NULL");
-            $statusStmt->execute([$mid]);
-            $newRevisionId = (int)$pdo->lastInsertId();
-
-            $prevRevStmt = $pdo->prepare("
+            // FLEXIBLE REVISION CYCLE: reuse the currently open (unsubmitted)
+            // revision row instead of stacking a new one on every request.
+            // This keeps the cycle repeatable for as many rounds as needed —
+            // the admin can request revision again and again, and the
+            // "latest revision" logic never points at an empty stacked row.
+            $openRevStmt = $pdo->prepare("
                 SELECT id FROM manuscript_revisions
-                WHERE manuscript_id = ? AND revision_number < ?
+                WHERE manuscript_id = ? AND revised_file IS NULL
                 ORDER BY revision_number DESC
                 LIMIT 1
             ");
-            $prevRevStmt->execute([$mid, $nextRevision]);
-            $prevRev = $prevRevStmt->fetch(PDO::FETCH_ASSOC);
+            $openRevStmt->execute([$mid]);
+            $openRev = $openRevStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($openRev) {
+                $newRevisionId = (int)$openRev['id'];
+                $nextRevision = null; // reused, no new number created
+            } else {
+                $revNumStmt = $pdo->prepare("
+                    SELECT COALESCE(MAX(revision_number), 0) + 1 
+                    FROM manuscript_revisions 
+                    WHERE manuscript_id = ?
+                ");
+                $revNumStmt->execute([$mid]);
+                $nextRevision = (int)$revNumStmt->fetchColumn();
+
+                $createStmt = $pdo->prepare("
+                    INSERT INTO manuscript_revisions 
+                    (manuscript_id, revision_number, submitted_at, revised_file, response_file)
+                    VALUES (?, ?, NOW(), NULL, NULL)
+                ");
+                $createStmt->execute([$mid, $nextRevision]);
+                $newRevisionId = (int)$pdo->lastInsertId();
+            }
+
+            // Move out of Under Review until the revision is submitted and reviewers are re-assigned
+            $statusStmt = $pdo->prepare("UPDATE manuscripts SET status = 'revision_requested' WHERE id = ? AND deleted_at IS NULL");
+            $statusStmt->execute([$mid]);
+
+            // Only copy forward entries from the previous revision when we
+            // actually created a NEW revision row (reused rows keep their
+            // existing entries untouched, so repeated requests don't duplicate
+            // already-addressed comments and re-block the cycle).
+            $prevRev = null;
+            if ($nextRevision !== null) {
+                $prevRevStmt = $pdo->prepare("
+                    SELECT id FROM manuscript_revisions
+                    WHERE manuscript_id = ? AND revision_number < ?
+                    ORDER BY revision_number DESC
+                    LIMIT 1
+                ");
+                $prevRevStmt->execute([$mid, $nextRevision]);
+                $prevRev = $prevRevStmt->fetch(PDO::FETCH_ASSOC);
+            }
 
             if ($prevRev) {
                 $copyStmt = $pdo->prepare("
@@ -1326,7 +1355,9 @@ case "decision":
             successResponse([
                 "decision" => "revision",
                 "revision_number" => $nextRevision,
-                "message" => "Revision created. Pending/expired reviews cleared."
+                "revision_id" => $newRevisionId,
+                "reused_revision" => ($nextRevision === null),
+                "message" => "Revision request recorded. Pending/expired reviews cleared."
             ]);
         } catch (Exception $e) {
             $pdo->rollBack();

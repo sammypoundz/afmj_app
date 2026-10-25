@@ -64,6 +64,7 @@ const Spinner = ({ dark = false }: { dark?: boolean }) => (
 /* ================= Types ================= */
 interface RevisionEntry {
   reviewer: string;
+  reviewerId?: number | null;
   reviewerComment: string;
   authorResponse: string;
   addressed: boolean;
@@ -805,11 +806,23 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
 
   // Reviewers who commented on the latest revision — pre-selected in the
   // reassign modal so the admin can easily reassign the same reviewers.
+  // Resolve by reviewerId first so the real reviewer is highlighted; skip the
+  // backend's generic "Reviewer" placeholder and editor-created placeholder
+  // entries (whose reviewer_id points at the editor, not a reviewer) so they
+  // never appear as a pre-selected card in the modal.
+  const editorId = manuscript.editorId ?? null;
   const previousReviewers = latestRevision
     ? Array.from(
         new Set(
           latestRevision.entries
-            .map(e => (e.reviewer || "").trim())
+            .map(e => {
+              if (e.reviewerId && e.reviewerId !== editorId) {
+                const match = allReviewers.find(r => r.id === e.reviewerId);
+                if (match) return match.name.trim();
+              }
+              const name = (e.reviewer || "").trim();
+              return name && name.toLowerCase() !== "reviewer" ? name : "";
+            })
             .filter(name => name.length > 0)
         )
       )
@@ -1129,7 +1142,11 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                                     <User size={16} color="#0d6efd" />
                                   </div>
                                   <span style={{ fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: "8px" }}>
-                                    {entry.reviewer}
+                                    {entry.reviewer && entry.reviewer.toLowerCase() !== "reviewer"
+                                      ? entry.reviewer
+                                      : entry.reviewerId
+                                        ? allReviewers.find(r => r.id === entry.reviewerId)?.name || "Reviewer"
+                                        : "Reviewer"}
                                     {!entry.addressed && (
                                       <span style={{
                                         fontSize: "0.7rem",
@@ -2482,6 +2499,12 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
   const normalizedStatus = rawStatus.toLowerCase();
   const isAccepted = normalizedStatus === "accepted";
   const isUnderReview = normalizedStatus === "under review";
+  // Flexible revision cycle: allow the admin to re-request a revision (or accept)
+  // from any active state, not just "Under Review" — otherwise a manuscript
+  // sitting in "Revision Requested"/"Revised" after the author resubmits has no
+  // way to be sent back for another round.
+  const canRequestRevision = ["under review", "revision requested", "revised"].includes(normalizedStatus);
+  const canAccept = ["under review", "revised"].includes(normalizedStatus);
   const isNewSubmission = rawStatus === "New Submissions"; // keep original case for this specific check
   const isPublished = normalizedStatus === "published";
 
@@ -3468,7 +3491,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
               Reject
             </button>
 
-            {isUnderReview && (
+            {canRequestRevision && (
               <>
                 <button
                   disabled={btnLoading === "revision"}
@@ -3492,7 +3515,7 @@ const ManuscriptModal: FC<ModalProps> = ({ manuscriptId, onClose, onUpdated }) =
                 </button>
 
                 <button
-                  disabled={btnLoading === "accept"}
+                  disabled={btnLoading === "accept" || !canAccept}
                   onClick={() => openEmailModal("accept")}
                   style={{
                     padding: "10px 18px",
