@@ -416,7 +416,7 @@ try {
             if ($reviewer) {
                 // Use the helper function to generate the email body (new short template)
                 $manData = ['slug' => $man['slug'], 'title' => $man['title']];
-                $body = generateReviewerInvitationEmailBody($manData, $reviewer['name'], $reviewer['email']);
+                $body = generateReviewerInvitationEmailBody($manData, $reviewer['name'], $reviewer['email'], null, $dueDate);
                 $subject = "Review Invitation – African Medical Journal";
                 sendEmail($reviewer['email'], $subject, $body);
             }

@@ -173,12 +173,25 @@ try {
             $stmt->execute([$reviewerId]);
             $revisions = (int)$stmt->fetchColumn();
 
+            // Nearest upcoming review deadline (for the dashboard countdown)
+            $stmt = $pdo->prepare("
+                SELECT MIN(r.due_date) AS next_due
+                FROM reviews r
+                JOIN manuscripts m ON m.id = r.manuscript_id
+                WHERE r.reviewer_id = ? AND r.completed_at IS NULL AND r.declined_at IS NULL
+                  AND r.due_date IS NOT NULL
+                  AND m.deleted_at IS NULL
+            ");
+            $stmt->execute([$reviewerId]);
+            $nextDue = $stmt->fetchColumn() ?: null;
+
             jsonResponse([
                 "invitations" => $invitations,
                 "active"      => $active,
                 "revisions"   => $revisions,
                 "completed"   => $completed,
-                "overdue"     => $overdue
+                "overdue"     => $overdue,
+                "nextDueDate" => $nextDue
             ]);
             break;
 
@@ -453,7 +466,7 @@ try {
             if (!$reviewId) errorResponse("review_id required");
 
             $check = $pdo->prepare("
-                SELECT r.manuscript_id 
+                SELECT r.manuscript_id, r.due_date 
                 FROM reviews r
                 WHERE r.id = ? AND r.reviewer_id = ? AND r.completed_at IS NULL AND r.declined_at IS NULL
             ");
@@ -462,6 +475,7 @@ try {
             if (!$row) errorResponse("Review not found, already completed, or declined", 404);
 
             $manId = $row['manuscript_id'];
+            $reviewDueDate = $row['due_date'];
 
             $stmt = $pdo->prepare("
                 SELECT 
@@ -508,7 +522,8 @@ try {
                 'study_type' => $man['study_type'],
                 'author_name' => $man['author_name'],
                 'file_path' => $effectiveFilePath,
-                'additional_reviewer_files' => $additionalFiles
+                'additional_reviewer_files' => $additionalFiles,
+                'due_date' => $reviewDueDate
             ]);
             break;
 

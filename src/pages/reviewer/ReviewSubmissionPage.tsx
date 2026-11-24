@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
-import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip } from "lucide-react";
+import { ArrowLeft, FileText, MessageSquare, Lock, CheckCircle, Star, Paperclip, Clock } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext"; // adjust path if needed
 import { API_ORIGIN } from "../../apiConfig"
 
@@ -40,7 +40,7 @@ const ReviewSubmissionPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [manuscriptInfo, setManuscriptInfo] = useState<{ manuscriptId: string; title: string } | null>(null);
+  const [manuscriptInfo, setManuscriptInfo] = useState<{ manuscriptId: string; title: string; dueDate?: string | null } | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [reviewId, setReviewId] = useState<number | null>(null);
 
@@ -90,6 +90,7 @@ const ReviewSubmissionPage = () => {
         setManuscriptInfo({
           manuscriptId: data.slug,
           title: data.title,
+          dueDate: data.due_date ?? null,
         });
       } catch (err: any) {
         console.error(err);
@@ -276,6 +277,39 @@ const ReviewSubmissionPage = () => {
               </div>
               <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#0f172a" }}>
                 {manuscriptInfo.title}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Review deadline banner */}
+        {manuscriptInfo?.dueDate && (
+          <div
+            style={{
+              background: new Date(manuscriptInfo.dueDate).getTime() < Date.now() ? "#fef2f2" : "#fffbeb",
+              borderLeft: `4px solid ${new Date(manuscriptInfo.dueDate).getTime() < Date.now() ? "#dc2626" : "#f59e0b"}`,
+              borderRadius: "12px",
+              padding: "14px 20px",
+              marginBottom: "24px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <Clock size={22} color={new Date(manuscriptInfo.dueDate).getTime() < Date.now() ? "#dc2626" : "#f59e0b"} />
+            <div>
+              <div style={{ fontWeight: 600, color: new Date(manuscriptInfo.dueDate).getTime() < Date.now() ? "#991b1b" : "#92400e" }}>
+                Review deadline: {new Date(manuscriptInfo.dueDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </div>
+              <div style={{ fontSize: "0.9rem", color: new Date(manuscriptInfo.dueDate).getTime() < Date.now() ? "#b91c1c" : "#a16207" }}>
+                {(() => {
+                  const diff = new Date(manuscriptInfo!.dueDate!).getTime() - Date.now();
+                  if (diff <= 0) return "This review is past its 20-day deadline — please submit it as soon as possible.";
+                  const d = Math.floor(diff / 86400000);
+                  const h = Math.floor((diff % 86400000) / 3600000);
+                  return `${d} day${d === 1 ? "" : "s"} ${h}h remaining — you have 20 days from assignment to submit your review.`;
+                })()}
               </div>
             </div>
           </div>

@@ -22,6 +22,7 @@ import {
   FileEdit,
   FileCheck,
   CreditCard,
+  FilePlus2,
 } from "lucide-react";
 
 interface DashboardData {
@@ -100,9 +101,16 @@ const Dashboard = () => {
   const stats = [
     {
       label: "Total Submissions",
-      value: manuscriptCounts["New Submissions"] ?? 0,
+      // ALL manuscripts ever submitted (new or old) — from dashboard.php COUNT(*)
+      value: data.kpi.total_submissions ?? 0,
       icon: FileText,
       path: "/eic/manuscripts",
+    },
+    {
+      label: "New Submissions",
+      value: manuscriptCounts["New Submissions"] ?? 0,
+      icon: FilePlus2,
+      path: "/eic/manuscripts/new-submissions",
     },
     {
       label: "Under Review",
@@ -124,9 +132,10 @@ const Dashboard = () => {
     },
     {
       label: "Gallery Proof",
-      value: manuscriptCounts["Revised"] ?? 0,
+      // Same source as the Publication page's Galley Proof tab — not "Revised"
+      value: publicationCounts.galleyProof ?? 0,
       icon: FileCheck,
-      path: "/eic/manuscripts/gallery-proof",
+      path: "/eic/publications/decision",
     },
     {
       label: "Rejected",

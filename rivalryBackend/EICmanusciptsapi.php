@@ -55,8 +55,10 @@ if ($tableCheck === false || $tableCheck->rowCount() == 0) {
 }
 
 // ===== SELF-HEAL: flip stale 'revision_requested' manuscripts to 'revised' =====
-// If the author's latest revision already has an uploaded revised_file, the
-// manuscript belongs in the Revised tab, regardless of any missed status update.
+// Only applies when the author's latest revision was submitted AFTER the most
+// recent revision request. If an editor has requested a NEW revision since the
+// author last submitted, the manuscript must stay in the Revision Requested
+// tab even though older revisions carry a revised_file.
 try {
     $pdo->exec("
         UPDATE manuscripts m
@@ -69,6 +71,16 @@ try {
                 AND mr.revised_file IS NOT NULL
                 AND mr.revision_number = (
                     SELECT MAX(x.revision_number)
+                    FROM manuscript_revisions x
+                    WHERE x.manuscript_id = m.id
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM notifications n
+              WHERE n.related_manuscript_id = m.id
+                AND n.type = 'revision-requested'
+                AND n.created_at > (
+                    SELECT MAX(x.submitted_at)
                     FROM manuscript_revisions x
                     WHERE x.manuscript_id = m.id
                 )
@@ -306,7 +318,12 @@ function generateReviewerInvitationBody($manuscriptId, $reviewerId, $plainPasswo
     $reviewer = $revStmt->fetch(PDO::FETCH_ASSOC);
     if (!$reviewer) return null;
 
-    return generateReviewerInvitationEmailBody($man, $reviewer['name'], $reviewer['email'], $plainPassword);
+    // The review due date for this manuscript (20-day window set at assignment)
+    $dueStmt = $pdo->prepare("SELECT due_date FROM reviews WHERE manuscript_id = ? AND reviewer_id = ? ORDER BY id DESC LIMIT 1");
+    $dueStmt->execute([$manuscriptId, $reviewerId]);
+    $dueDate = $dueStmt->fetchColumn() ?: null;
+
+    return generateReviewerInvitationEmailBody($man, $reviewer['name'], $reviewer['email'], $plainPassword, $dueDate);
 }
 
 // Helper to get primary file path for a manuscript
@@ -753,6 +770,34 @@ case "show":
         $addressed = 0;
         $total = 0;
 
+        // Reviewers who requested this revision: those whose completed review
+        // recommended a revision (minor/major). Their feedback is what triggered
+        // the revision request, so their names are shown as the requester.
+        $requestedByNames = [];
+        $reqStmt = $pdo->prepare("
+            SELECT DISTINCT u.name
+            FROM reviews r
+            JOIN users u ON u.id = r.reviewer_id
+            JOIN review_scores rs ON rs.review_id = r.id
+            WHERE r.manuscript_id = ?
+              AND r.status = 'completed'
+              AND rs.recommendation IN ('minor_revision', 'major_revision')
+        ");
+        $reqStmt->execute([$id]);
+        foreach ($reqStmt->fetchAll(PDO::FETCH_COLUMN) as $name) {
+            if ($name && !in_array($name, $requestedByNames)) $requestedByNames[] = $name;
+        }
+        // Fallback: reviewers pulled into revision_entries with a comment but
+        // whose review row/score no longer carries the recommendation.
+        if (empty($requestedByNames)) {
+            foreach ($entries as $e) {
+                if (!empty($e['reviewer']) && $e['reviewer'] !== 'Reviewer'
+                    && !in_array($e['reviewer'], $requestedByNames)) {
+                    $requestedByNames[] = $e['reviewer'];
+                }
+            }
+        }
+
         foreach ($entStmt->fetchAll(PDO::FETCH_ASSOC) as $e) {
             $total++;
             if ($e['addressed']) $addressed++;
@@ -783,6 +828,7 @@ case "show":
             "submittedAt"   => $rev['submitted_at'],
             "revisedFile"   => $rev['revised_file'],
             "responseFile"  => $rev['response_file'],
+            "requestedBy"   => $requestedByNames,
             "entries"       => $entries,
             "entryStats"    => [
                 "total"     => $total,
@@ -904,7 +950,16 @@ case "assignReviewers":
                 VALUES (?, ?, 'pending', NOW(), ?, DATE_ADD(NOW(), INTERVAL 20 DAY), ?)
             ");
 
-            $order = 1;
+            // Note: we deliberately KEEP historical rows (status = 'completed' or
+            // 'expired'). Only void rows are wiped above. A reviewer may be
+            // re-assigned to and fro as many times as needed — each new
+            // assignment is its own fresh 'pending' row, so nothing gets stuck
+            // on a previous round (previously the per-round $order reset to 1
+            // collided with rows from an earlier round).
+            $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(review_order), 0) FROM reviews WHERE manuscript_id = ?");
+            $orderStmt->execute([$mid]);
+            $order = (int)$orderStmt->fetchColumn() + 1;
+
             $assignedReviewerIds = [];
             foreach ($reviewers as $rid) {
                 $rid = (int)$rid;
@@ -914,18 +969,37 @@ case "assignReviewers":
                     throw new Exception("Invalid or inactive reviewer ID: $rid");
                 }
 
+                // Refresh the acceptance marker for repeat rounds: reuse the
+                // previous outcome (completed => auto-accept this round) instead
+                // of hard-coding accepted_at = NOW(), and leave genuine pending
+                // rows alone so a reviewer can also accept manually as before.
                 $prevStmt = $pdo->prepare("
-                    SELECT 1 FROM reviews
-                    WHERE manuscript_id = ? AND reviewer_id = ? AND status = 'completed'
+                    SELECT status FROM reviews
+                    WHERE manuscript_id = ? AND reviewer_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
                 ");
                 $prevStmt->execute([$mid, $rid]);
-                $hasCompleted = $prevStmt->fetch() ? true : false;
+                $prevRow = $prevStmt->fetch(PDO::FETCH_ASSOC);
+                $hasCompleted = ($prevRow && $prevRow['status'] === 'completed');
 
                 $acceptedAt = $hasCompleted ? date('Y-m-d H:i:s') : null;
 
                 $ins->execute([$mid, $rid, $acceptedAt, $order]);
                 $assignedReviewerIds[] = $rid;
                 $order++;
+
+                // Email the reviewer with the 20-day review deadline
+                $revStmt = $pdo->prepare("SELECT email, name FROM users WHERE id = ?");
+                $revStmt->execute([$rid]);
+                $rev = $revStmt->fetch(PDO::FETCH_ASSOC);
+                if ($rev) {
+                    $dueStmt = $pdo->prepare("SELECT due_date FROM reviews WHERE manuscript_id = ? AND reviewer_id = ? ORDER BY id DESC LIMIT 1");
+                    $dueStmt->execute([$mid, $rid]);
+                    $revDueDate = $dueStmt->fetchColumn() ?: null;
+                    $body = generateReviewerInvitationEmailBody(['id' => $mid, 'title' => $man['title']], $rev['name'], $rev['email'], null, $revDueDate);
+                    sendEmail($rev['email'], "Review Invitation – African Medical Journal", $body);
+                }
             }
 
             $invitationMessage = "You have been invited to review the manuscript \"{$man['title']}\". Please log in to accept or decline.";
@@ -1015,6 +1089,18 @@ case "replaceReviewer":
             VALUES (?, ?, 'pending', NOW(), ?, DATE_ADD(NOW(), INTERVAL 20 DAY), ?)
         ");
         $ins->execute([$mid, $newRid, $acceptedAt, $reviewOrder]);
+
+        // Email the new reviewer with the 20-day review deadline
+        $newRevStmt = $pdo->prepare("SELECT email, name FROM users WHERE id = ?");
+        $newRevStmt->execute([$newRid]);
+        $newRev = $newRevStmt->fetch(PDO::FETCH_ASSOC);
+        if ($newRev) {
+            $dueStmt = $pdo->prepare("SELECT due_date FROM reviews WHERE manuscript_id = ? AND reviewer_id = ? ORDER BY id DESC LIMIT 1");
+            $dueStmt->execute([$mid, $newRid]);
+            $revDueDate = $dueStmt->fetchColumn() ?: null;
+            $body = generateReviewerInvitationEmailBody(['id' => $mid, 'title' => $man['title']], $newRev['name'], $newRev['email'], null, $revDueDate);
+            sendEmail($newRev['email'], "Review Invitation – African Medical Journal", $body);
+        }
 
         $pdo->commit();
 
@@ -1236,9 +1322,14 @@ case "decision":
             // This keeps the cycle repeatable for as many rounds as needed —
             // the admin can request revision again and again, and the
             // "latest revision" logic never points at an empty stacked row.
+            // NOTE: revision_number = 0 is the original-submission placeholder and
+            // must NEVER be reused — it has no file, and reusing it makes the
+            // self-heal (which checks the LATEST revision for an uploaded file)
+            // flip the status straight back to 'revised', bypassing the
+            // Revision Requested state entirely.
             $openRevStmt = $pdo->prepare("
                 SELECT id FROM manuscript_revisions
-                WHERE manuscript_id = ? AND revised_file IS NULL
+                WHERE manuscript_id = ? AND revised_file IS NULL AND revision_number > 0
                 ORDER BY revision_number DESC
                 LIMIT 1
             ");
@@ -1278,7 +1369,7 @@ case "decision":
             if ($nextRevision !== null) {
                 $prevRevStmt = $pdo->prepare("
                     SELECT id FROM manuscript_revisions
-                    WHERE manuscript_id = ? AND revision_number < ?
+                    WHERE manuscript_id = ? AND revision_number < ? AND revision_number > 0
                     ORDER BY revision_number DESC
                     LIMIT 1
                 ");

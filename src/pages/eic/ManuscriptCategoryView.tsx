@@ -76,6 +76,7 @@ interface Revision {
   submittedAt: string;
   revisedFile: string;
   responseFile: string;
+  requestedBy?: string[] | null;
   entries: RevisionEntry[];
   entryStats?: {
     total: number;
@@ -969,6 +970,14 @@ const RevisionHistoryModal: FC<RevisionHistoryModalProps> = ({
                         <div style={{ fontSize: "0.85rem", color: allAddressed ? "#059669" : "#a16207", marginTop: "2px" }}>
                           Submitted on {rev.submittedAt}
                         </div>
+                        {rev.requestedBy && rev.requestedBy.length > 0 && (
+                          <div style={{ fontSize: "0.8rem", color: "#475569", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <UserCheck size={14} color="#0d6efd" />
+                            <span>
+                              Requested by <strong>{rev.requestedBy.join(", ")}</strong>
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1404,7 +1413,7 @@ const ReassignEmailModal: FC<ReassignEmailModalProps> = ({
     `Reassignment of manuscript "${manuscript.title}" for review`
   );
   const [body, setBody] = useState(
-    `Dear Reviewer,\n\nYou have been assigned to review the manuscript "${manuscript.title}" (ID: ${formatManuscriptId(manuscript.id)}).\n\nPlease log in to the system to access the manuscript and submit your review.\n\nThank you,\nEditorial Team`
+    `Dear Reviewer,\n\nYou have been assigned to review the manuscript "${manuscript.title}" (ID: ${formatManuscriptId(manuscript.id)}).\n\nYou have 20 days to submit your review. Please log in to the system to access the manuscript and submit your review before the deadline.\n\nThank you,\nEditorial Team`
   );
   const [attachments, setAttachments] = useState<File[]>([]);
 

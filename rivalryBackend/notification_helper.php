@@ -256,8 +256,18 @@ function generateRevisionEmailBody($manuscript, $feedbacks = [], $revisionLink =
 /**
  * Generate reviewer invitation email body (includes dashboard link).
  */
-function generateReviewerInvitationEmailBody($manuscript, $reviewerName, $reviewerEmail, $plainPassword = null) {
+function generateReviewerInvitationEmailBody($manuscript, $reviewerName, $reviewerEmail, $plainPassword = null, $dueDate = null) {
     global $pdo;
+
+    // Review deadline: use the actual due date when we know it, otherwise
+    // calculate it as 20 days from today (the standard review window).
+    if (!empty($dueDate)) {
+        $deadlineStr = date('l, jS F Y', strtotime($dueDate));
+        $daysLeft = max(0, (int)ceil((strtotime($dueDate) - time()) / 86400));
+    } else {
+        $deadlineStr = date('l, jS F Y', strtotime('+20 days'));
+        $daysLeft = 20;
+    }
 
     if (empty($manuscript['slug']) && !empty($manuscript['id'])) {
         $stmt = $pdo->prepare("SELECT slug FROM manuscripts WHERE id = ?");
@@ -272,6 +282,10 @@ function generateReviewerInvitationEmailBody($manuscript, $reviewerName, $review
     $body = "
         <p>Dear " . htmlspecialchars($reviewerName) . ",</p>
         <p>You have been invited to review the manuscript {$formattedId}. Please log in to accept or decline.</p>
+        <p style='background:#fef3c7; border-left:4px solid #f59e0b; padding:10px 14px;'>
+            <strong>Review deadline:</strong> You have <strong>20 days</strong> to submit your review once you accept. " .
+            ($dueDate ? "Your review is due on <strong>{$deadlineStr}</strong> (about <strong>{$daysLeft} day" . ($daysLeft == 1 ? '' : 's') . " from now)</strong>." : "The deadline for this review will be <strong>{$deadlineStr}</strong> (20 days from today).") . "
+        </p>
         <p><a href='" . DASHBOARD_URL . "'>Click here to login</a></p>
     ";
     if ($plainPassword) {

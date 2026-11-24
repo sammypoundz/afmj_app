@@ -43,12 +43,14 @@ try {
     ");
     $revisions = $revisionsStmt->fetchColumn();
 
-    // Gallery proof count: manuscripts in production with a galley proof status not 'approved' - not soft-deleted
+    // Gallery proof count: matches the galley list view (EICpublicationApi type=galley)
     $galleryProofStmt = $pdo->query("
         SELECT COUNT(*)
         FROM manuscripts
-        WHERE in_production = 1
+        WHERE payment_assigned = TRUE
+          AND payment_status = 'paid'
           AND galley_proof_status IS NOT NULL
+          AND galley_proof_status != ''
           AND galley_proof_status != 'approved'
           AND deleted_at IS NULL
     ");

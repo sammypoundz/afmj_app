@@ -168,7 +168,16 @@ const ReviewerInvitations = () => {
                       : inv.manuscriptId}
                   </strong>
                   <p>{inv.title}</p>
-                  <small>Response deadline: {inv.dueDate}</small>
+                  {inv.dueDate && (
+                    <small>
+                      Review deadline: {new Date(inv.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+                      {(() => {
+                        const diff = new Date(inv.dueDate).getTime() - Date.now();
+                        const d = Math.floor(diff / 86400000);
+                        return diff > 0 ? ` (${d} day${d === 1 ? "" : "s"} left — 20 days given for review)` : " (deadline passed)";
+                      })()}
+                    </small>
+                  )}
                 </div>
 
                 <div className="actions">

@@ -40,19 +40,20 @@ if (strlen($newPassword) < 6) {
 }
 
 try {
-    // Find user with matching OTP and not expired
+    // Find user with matching OTP (expiry checked in PHP so the same
+    // clock/timezone that created the OTP also validates it -- avoids
+    // PHP vs MySQL timezone mismatches that make valid OTPs look expired)
     $stmt = $pdo->prepare("
-        SELECT id, name, email FROM users 
+        SELECT id, name, email, reset_otp_expires_at FROM users 
         WHERE email = ? 
           AND reset_otp = ? 
-          AND reset_otp_expires_at > NOW()
           AND active = 1 
           AND suspended = 0
     ");
     $stmt->execute([$email, $otp]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$user) {
+    if (!$user || empty($user['reset_otp_expires_at']) || strtotime($user['reset_otp_expires_at']) <= time()) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Invalid or expired OTP']);
         exit;

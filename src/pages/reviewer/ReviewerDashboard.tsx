@@ -19,12 +19,14 @@ const API_BASE = `${API_ORIGIN}/api2/reviewerApi.php`;
 const ReviewerDashboard = () => {
   const navigate = useNavigate();
   const { authFetch, sessionId } = useAuth();
+  const [now, setNow] = useState(Date.now());
   const [stats, setStats] = useState({
     invitations: 0,
     active: 0,
     revisions: 0,
     completed: 0,
     overdue: 0,
+    nextDueDate: null as string | null,
   });
   const [pendingActions, setPendingActions] = useState({
     invitations: 0,
@@ -65,6 +67,12 @@ const ReviewerDashboard = () => {
     fetchData();
   }, [authFetch, sessionId, navigate]);
 
+  // Refresh the countdown every minute
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const statItems = [
     { label: "Review Invitations", value: stats.invitations, icon: Mail, trend: "+0", path: "/reviewer/invitations" },
     { label: "Active Reviews", value: stats.active, icon: Clock, trend: "+0", path: "/reviewer/active" },
@@ -74,6 +82,36 @@ const ReviewerDashboard = () => {
   ];
 
   if (loading) return <div>Loading dashboard...</div>;
+
+  // Countdown to the nearest review deadline
+  const nowMs = now;
+  let countdown: {
+    days: number;
+    hours: number;
+    overdue: boolean;
+    label: string;
+  } | null = null;
+  if (stats.nextDueDate) {
+    const due = new Date(stats.nextDueDate);
+    if (!isNaN(due.getTime())) {
+      const diffMs = due.getTime() - nowMs;
+      const overdue = diffMs <= 0;
+      const days = Math.floor(Math.abs(diffMs) / 86400000);
+      const hours = Math.floor((Math.abs(diffMs) % 86400000) / 3600000);
+      const dueLabel = due.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      countdown = {
+        days,
+        hours,
+        overdue,
+        label: dueLabel,
+      };
+    }
+  }
 
   return (
     <>
@@ -256,6 +294,38 @@ const ReviewerDashboard = () => {
           </h2>
 
           <div className="kpi-modern-grid">
+          {countdown && (
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                background: countdown.overdue ? "#fef2f2" : "#fffbeb",
+                border: countdown.overdue ? "1px solid #fecaca" : "1px solid #fde68a",
+                borderLeft: `6px solid ${countdown.overdue ? "#dc2626" : "#f59e0b"}`,
+                borderRadius: "12px",
+                padding: "14px 18px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                cursor: "pointer",
+              }}
+              onClick={() => navigate(countdown!.overdue ? "/reviewer/overdue" : "/reviewer/active")}
+            >
+              {countdown.overdue ? <AlertTriangle size={24} color="#dc2626" /> : <Clock size={24} color="#f59e0b" />}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "1rem", color: countdown.overdue ? "#991b1b" : "#92400e" }}>
+                  {countdown.overdue
+                    ? `Review overdue — due since ${countdown.label}`
+                    : `Review deadline: ${countdown.label}`}
+                </div>
+                <div style={{ fontSize: "0.9rem", color: countdown.overdue ? "#b91c1c" : "#a16207" }}>
+                  {countdown.overdue
+                    ? `You are ${countdown.days} day${countdown.days === 1 ? "" : "s"} past the 20-day review deadline. Please submit your review as soon as possible.`
+                    : `${countdown.days} day${countdown.days === 1 ? "" : "s"} ${countdown.hours}h remaining — you have 20 days from assignment to submit your review.`}
+                </div>
+              </div>
+            </div>
+          )}
             {statItems.map((stat) => {
               const Icon = stat.icon;
               return (

@@ -301,7 +301,16 @@ const ReviewerActiveReviews = () => {
                   </h3>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b" }}>
                     <Clock size={14} />
-                    <span style={{ fontSize: "0.9rem" }}>Due: {review.dueDate}</span>
+                    <span style={{ fontSize: "0.9rem" }}>
+                      Due: {review.dueDate ? new Date(review.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" }) : "—"}
+                      {review.dueDate && (() => {
+                        const diff = new Date(review.dueDate).getTime() - Date.now();
+                        if (diff <= 0) return " (overdue)";
+                        const d = Math.floor(diff / 86400000);
+                        const h = Math.floor((diff % 86400000) / 3600000);
+                        return ` — ${d} day${d === 1 ? "" : "s"} ${h}h left`;
+                      })()}
+                    </span>
                   </div>
                 </div>
 
